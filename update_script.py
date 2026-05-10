@@ -1,79 +1,61 @@
 import os
-import time
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+import cloudscraper
+import json
 
-def update_naukri_profile():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=400,800") # Mobile size
+def run():
+    scraper = cloudscraper.create_scraper(
+        browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
+    )
     
-    # Emulating a real Android Mobile Device
-    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 40)
-
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Appid": "109",
+        "Systemid": "109",
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest"
+    }
+    
     try:
-        print("Bhai, Mobile site se login try kar raha hoon...")
-        driver.get("https://www.naukri.com/nlogin/login")
-        time.sleep(5)
-
-        # Checking if blocked
-        if "Access Denied" in driver.title or "Cloudflare" in driver.page_source:
-            print("❌ IP Blocked by Naukri. Changing strategy to direct profile hit...")
+        # 1. Login
+        print("Logging in...")
+        auth_url = "https://www.naukri.com/nlogin/login"
+        payload = {"username": os.environ['NAUKRI_EMAIL'], "password": os.environ['NAUKRI_PASS']}
+        res = scraper.post(auth_url, json=payload, headers=headers)
         
-        # Login
-        wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
-        driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
+        if res.status_code != 200:
+            print(f"Login failed: {res.status_code}")
+            return
         
-        login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
-        driver.execute_script("arguments[0].click();", login_btn)
+        print("Login Success! Fetching current headline...")
+
+        # 2. Get Profile Data
+        profile_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary"
+        profile_res = scraper.get(profile_url, headers=headers)
         
-        print("Login clicked, waiting for redirect...")
-        time.sleep(15) 
-
-        # Mobile Profile Page
-        driver.get("https://www.naukri.com/mnjuser/profile")
-        print(f"Current URL: {driver.current_url}")
-        time.sleep(10)
-
-        resume_path = os.path.join(os.getcwd(), "Resume.pdf")
-        if os.path.exists(resume_path):
-            # Naukri Mobile par file input dhoondna
-            # Mobile site par ID 'attachCV' ki jagah simple file type hota hai
-            print("Searching for Mobile Upload button...")
+        if profile_res.status_code == 200:
+            current_summary = profile_res.json().get('summary', 'Azure Infrastructure and Data Engineer')
             
-            # Pure JavaScript upload trigger
-            try:
-                upload_input = driver.find_element(By.CSS_VALUE, "input[type='file']")
-            except:
-                upload_input = driver.find_element(By.XPATH, "//input[@type='file']")
+            # 3. Toggle a dot (.) at the end to trigger "Updated Today"
+            if current_summary.endswith('.'):
+                new_summary = current_summary[:-1]
+            else:
+                new_summary = current_summary + '.'
             
-            driver.execute_script("arguments[0].style.display = 'block';", upload_input)
-            upload_input.send_keys(resume_path)
+            print(f"Updating summary to trigger refresh...")
+            update_payload = {"summary": new_summary}
             
-            print("Wait for upload sync (20s)...")
-            time.sleep(20)
-            print("🏁 SUCCESS: Profile Refreshed via Mobile Site!")
+            # PUT request to update
+            update_res = scraper.put(profile_url, json=update_payload, headers=headers)
+            
+            if update_res.status_code in [200, 204]:
+                print("🏁 SUCCESS: Profile Refreshed! (Updated Today status active)")
+            else:
+                print(f"Update failed: {update_res.status_code}")
         else:
-            print("❌ Resume.pdf missing in repo!")
+            print(f"Could not fetch profile: {profile_res.status_code}")
 
     except Exception as e:
-        print(f"❌ Failed: {str(e)}")
-        driver.save_screenshot("debug_error.png")
-        # Ye line help karegi dekhne mein ki exactly page par kya hai
-        print("Page Title was: " + driver.title)
-    finally:
-        driver.quit()
+        print(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    update_naukri_profile()
+    run()
