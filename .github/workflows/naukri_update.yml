@@ -1,20 +1,38 @@
-name: Naukri Auto Refresh (No Cookies)
+name: Naukri Auto Refresh (Stable)
+
 on:
   schedule:
-    - cron: '0 4 * * *' # Subah 9:30 AM IST
-  workflow_dispatch:
+    # Roz subah 9:00 AM IST (3:30 AM UTC) par chalega
+    - cron: '30 3 * * *'
+  workflow_dispatch: # Taaki tum manually bhi "Run Workflow" kar sako
+
 jobs:
-  update:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      - name: Dependencies
-        run: pip install selenium webdriver-manager
-      - name: Run
+
+      - name: Install Chrome and Dependencies
+        run: |
+          pip install selenium webdriver-manager
+
+      - name: Run Profile Update Script
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
         run: python update_script.py
+
+      - name: Upload Debug Screenshot
+        if: always() # Ye hamesha chalega, check karne ke liye ki status kya hai
+        uses: actions/upload-artifact@v4
+        with:
+          name: naukri-status-screenshot
+          path: debug_error.png
+          if-no-files-found: ignore
