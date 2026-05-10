@@ -19,7 +19,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install selenium webdriver-manager
+          pip install cloudscraper
 
       - name: Run Profile Update Script
         env:
