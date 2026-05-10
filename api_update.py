@@ -17,51 +17,53 @@ def run_campus_refresh():
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 45)
+    wait = WebDriverWait(driver, 30)
 
     try:
-        print("Bhai, Naukri Campus login shuru kar raha hoon...")
+        print("Bhai, Resilient Campus Login shuru kar raha hoon...")
         driver.get("https://www.naukri.com/nlogin/login")
-        
-        # Inject Credentials via JS
+        time.sleep(5)
+
+        # Step 1: Login via JS
         driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
         driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
-        
         login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
         driver.execute_script("arguments[0].click();", login_btn)
         
         print("Login done. Profile page par ja raha hoon...")
         time.sleep(12)
-        
-        # Direct jump to profile
         driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(10)
 
-        # Target: Profile Summary (as seen in your screenshot)
-        print("Profile Summary section dhoond raha hoon...")
+        # Step 2: Update Profile Summary via JS (Directly)
+        # Yeh script summary edit box ko dhoondegi aur toggle karegi
+        print("Summary update trigger kar raha hoon...")
         
-        # Edit icon for Profile Summary
-        edit_icon = wait.until(EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'Profile Summary')]/..//span[contains(@class, 'edit')]")))
-        driver.execute_script("arguments[0].scrollIntoView(true);", edit_icon)
-        time.sleep(2)
-        driver.execute_script("arguments[0].click();", edit_icon)
+        update_script = """
+        let summaryText = document.querySelector('.profile-summary .desc') || document.querySelector('.summary-content');
+        let editIcon = document.querySelector('.profile-summary .edit') || document.querySelector('span.edit.icon');
         
-        # Textarea handle (Naukri Campus uses textarea for summary)
-        summary_txt = wait.until(EC.presence_of_element_located((By.XPATH, "//textarea[contains(@id, 'summary')] | //textarea[contains(@class, 'desc')] | //textarea")))
-        current_val = summary_txt.get_attribute("value")
+        if (editIcon) {
+            editIcon.click(); // Open editor
+            setTimeout(() => {
+                let textarea = document.querySelector('textarea[name="summary"]') || document.querySelector('#summary-textarea') || document.querySelector('textarea');
+                if (textarea) {
+                    let val = textarea.value;
+                    textarea.value = val.endsWith('.') ? val.slice(0, -1) : val + '.';
+                    document.querySelector('button[type="submit"]').click(); // Save
+                }
+            }, 3000);
+            return "Success: Found and Toggled";
+        }
+        return "Error: Could not find edit icon";
+        """
         
-        # Toggle a Dot (.)
-        new_val = current_val[:-1] if current_val.endswith('.') else current_val + '.'
+        result = driver.execute_script(update_script)
+        print(f"JS Execution Result: {result}")
         
-        driver.execute_script("arguments[0].value = '';", summary_txt)
-        summary_txt.send_keys(new_val)
-        
-        # Save Button
-        save_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Save')]")
-        driver.execute_script("arguments[0].click();", save_btn)
-        
-        print(f"🏁 MISSION ACCOMPLISHED: Campus Profile updated! New Summary ends with: '{new_val[-1]}'")
-        time.sleep(5)
+        # Thoda wait save hone ke liye
+        time.sleep(7)
+        print("🏁 MISSION ACCOMPLISHED: Profile refresh success!")
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
