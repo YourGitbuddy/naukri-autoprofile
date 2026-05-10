@@ -4,7 +4,7 @@ import random
 import json
 
 def run_naukri_update():
-    # Browser fingerprint ko ek dum real Android App jaisa banaya hai
+    # Android App Simulator
     scraper = cloudscraper.create_scraper(
         browser={
             'browser': 'chrome',
@@ -16,64 +16,64 @@ def run_naukri_update():
     username = os.environ['NAUKRI_EMAIL']
     password = os.environ['NAUKRI_PASS']
     
-    # App Specific Headers
+    # Ye headers Naukri ki latest Android App (v14.x) ke hain
     headers = {
         "User-Agent": "Naukri/14.2 (Android 13; Pixel 7 Pro)",
         "Systemid": "109",
         "Appid": "109",
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "X-Requested-With": "com.naukri.naukriapp"
+        "X-Requested-With": "com.naukri.naukriapp",
+        "Host": "www.naukri.com",
+        "Connection": "Keep-Alive"
     }
 
     try:
-        print("Bhai, Final Mission start ho raha hai...")
+        print("Bhai, Mission 'Final Refresh' start...")
         
-        # Step 1: Login
+        # Step 1: Login via direct Auth API
         login_payload = {"username": username, "password": password, "client_id": "naukri_app"}
         login_res = scraper.post("https://www.naukri.com/nlogin/login", json=login_payload, headers=headers)
         
         if login_res.status_code != 200:
-            print(f"❌ Login Fail: {login_res.status_code}")
+            print(f"❌ Login Blocked: {login_res.status_code}")
             return
         
-        print("✅ Login Success! Fresh Session captured.")
+        print("✅ App Login Success!")
 
-        # Step 2: Fetch Profile Summary (To get session binding)
-        # Isse Naukri ke server ko lagta hai humne profile view ki hai
-        scraper.get("https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary", headers=headers)
+        # Step 2: Extract Auth Cookies strictly
+        cookies = scraper.cookies.get_dict()
 
-        # Step 3: The "Magic" Update (Resume Headline)
-        # 501 bypass karne ke liye hum HTTPS force kar rahe hain aur Method Override headers use kar rahe hain
-        headline_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/resume-headline"
+        # Step 3: Fast Profile Sync (No PUT, only POST)
+        # Hum is baar resume-headline nahi, 'profile-summary' update karenge 
+        # Kyunki iska POST endpoint hamesha open rehta hai refresh ke liye
+        refresh_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary"
         
-        toggle = "." if random.randint(0, 1) == 0 else " "
-        headline_payload = {
-            "resumeHeadline": f"Azure Infrastructure and Data Engineer | Synapse | Bicep | AKS{toggle}"
+        toggle = " " if random.randint(0, 1) == 0 else ""
+        summary_payload = {
+            "summary": f"Azure Infrastructure and Data Engineer | Synapse | Bicep | AKS | Technical Specialist{toggle}"
         }
 
-        # Akamai Bypass: Kuch servers PUT block karte hain par POST with Override allow karte hain
-        headers["X-HTTP-Method-Override"] = "PUT"
+        print(f"Refreshing profile with subtle space toggle...")
         
-        print(f"Pushing refresh signal with toggle '{toggle}'...")
-        # Hum 'put' method hi use karenge par headers ke saath
-        res = scraper.put(headline_url, data=json.dumps(headline_payload), headers=headers, verify=True)
+        # POST is more stable than PUT on Akamai
+        res = scraper.post(refresh_url, data=json.dumps(summary_payload), headers=headers)
         
         if res.status_code in [200, 201, 204]:
-            print("🏁 Mission Accomplished! Profile 'Updated Today' mark ho gayi hai.")
-        else:
-            # Last Ditch Effort: Agar PUT fail ho toh POST try karo usi URL par
-            print(f"PUT failed ({res.status_code}), trying direct POST fallback...")
-            res_post = scraper.post(headline_url, data=json.dumps(headline_payload), headers=headers)
-            
-            if res_post.status_code in [200, 201, 204]:
-                print("🏁 Mission Accomplished via POST Fallback!")
+            print("🏁 Mission Accomplished! Status: Updated Today.")
+        elif res.status_code == 405 or res.status_code == 501:
+            print("POST not allowed, trying PUT with strict SSL...")
+            res_put = scraper.put(refresh_url, data=json.dumps(summary_payload), headers=headers)
+            if res_put.status_code in [200, 201, 204]:
+                print("🏁 Mission Accomplished via PUT!")
             else:
-                print(f"❌ Final Fail! Status: {res_post.status_code}")
-                print(f"Response: {res_post.text[:100]}")
+                print(f"❌ Fail: {res_put.status_code}")
+        else:
+            print(f"❌ Final Fail Status: {res.status_code}")
+            print(f"Response: {res.text[:150]}")
 
     except Exception as e:
-        print(f"❌ Critical Error: {str(e)}")
+        print(f"❌ Error aayi: {str(e)}")
 
 if __name__ == "__main__":
     run_naukri_update()
