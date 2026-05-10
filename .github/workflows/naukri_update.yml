@@ -13,9 +13,10 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      - name: Install requests
-        run: pip install requests
+      - name: Install Selenium
+        run: pip install selenium webdriver-manager
       - name: Run Script
         env:
-          NAUKRI_COOKIE: ${{ secrets.NAUKRI_COOKIE }}
+          NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
+          NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
         run: python update_script.py
