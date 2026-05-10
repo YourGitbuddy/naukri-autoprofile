@@ -20,7 +20,6 @@ def run_naukri_update():
     wait = WebDriverWait(driver, 45)
 
     try:
-        # Step 1: Login via Selenium to get fresh cookies
         print("Bhai, login start ho raha hai...")
         driver.get("https://www.naukri.com/nlogin/login")
         
@@ -31,55 +30,48 @@ def run_naukri_update():
         login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
         driver.execute_script("arguments[0].click();", login_btn)
         
-        # Wait for dashboard to ensure login is complete
         time.sleep(15)
 
-        # Step 2: Transfer cookies from Selenium to Requests
         print("Cookies transfer kar raha hoon...")
         session = requests.Session()
         for cookie in driver.get_cookies():
             session.cookies.set(cookie['name'], cookie['value'])
 
-        # Step 3: Fetch unique App-ID/Token if needed (Optional but safe)
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             'Referer': 'https://www.naukri.com/mnjuser/profile',
-            'X-Requested-With': 'XMLHttpRequest',
+            'x-requested-with': 'XMLHttpRequest',
             'appid': '135',
             'systemid': '135'
         }
 
-        # Step 4: Final Upload via API
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
         if os.path.exists(resume_path):
-            print(f"API se Resume bhej raha hoon: {resume_path}")
+            # API Retry Logic
+            urls = [
+                'https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v1/users/self/resume',
+                'https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/resume'
+            ]
             
-            with open(resume_path, 'rb') as f:
-                # Naukri ka primary resume upload endpoint
-                files = {'resume': ('Resume.pdf', f, 'application/pdf')}
-                # Is URL ko Naukri ne v1/users/self/resume par update kiya hai
-                response = session.post(
-                    'https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v1/users/self/resume',
-                    headers=headers,
-                    files=files
-                )
-            
-            if response.status_code in [200, 201, 204]:
-                print("✅ Mission Success! Resume upload ho gaya.")
-            else:
-                # Retry with fallback URL v0 if v1 fails
-                print(f"v1 failed ({response.status_code}), trying v0...")
-                response_v0 = session.post(
-                    'https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/resume',
-                    headers=headers,
-                    files=files
-                )
-                if response_v0.status_code in [200, 201]:
-                    print("✅ Mission Success via v0!")
+            success = False
+            for url in urls:
+                print(f"Trying API: {url}")
+                # File ko har baar naye siray se open karenge taaki 'closed file' error na aaye
+                with open(resume_path, 'rb') as f:
+                    files = {'resume': ('Resume.pdf', f, 'application/pdf')}
+                    response = session.post(url, headers=headers, files=files)
+                
+                if response.status_code in [200, 201, 204]:
+                    print(f"✅ Mission Success! Profile updated via {url.split('/')[-2]}.")
+                    success = True
+                    break
                 else:
-                    print(f"❌ Dono API fail ho gayi: {response_v0.status_code}")
+                    print(f"❌ Failed for {url.split('/')[-2]} (Status: {response.status_code})")
+            
+            if not success:
+                print("❌ Dono API fail ho gayi hain.")
         else:
-            print("❌ Error: Resume.pdf nahi mili repo mein.")
+            print("❌ Resume.pdf nahi mili repo mein.")
 
     except Exception as e:
         print(f"❌ Error aayi: {str(e)}")
