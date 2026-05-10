@@ -1,6 +1,6 @@
 import os
 import time
-import random
+import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -14,63 +14,75 @@ def run_naukri_update():
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 30) # Precise wait
+    wait = WebDriverWait(driver, 45)
 
     try:
-        # 1. Login
-        print("Logging into Naukri...")
+        # Step 1: Login via Selenium to get fresh cookies
+        print("Bhai, login start ho raha hai...")
         driver.get("https://www.naukri.com/nlogin/login")
         
-        wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
-        driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
+        email_field = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
+        driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
+        driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
         
         login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
         driver.execute_script("arguments[0].click();", login_btn)
         
-        # Dashboard load hone ka wait
-        time.sleep(10)
+        # Wait for dashboard to ensure login is complete
+        time.sleep(15)
 
-        # 2. Navigate to Profile with Refresh
-        print("Navigating to Profile Section...")
-        driver.get("https://www.naukri.com/mnjuser/profile")
-        time.sleep(5)
-        driver.refresh() # Page ko refresh karna zaroori hai session sync ke liye
-        time.sleep(10)
+        # Step 2: Transfer cookies from Selenium to Requests
+        print("Cookies transfer kar raha hoon...")
+        session = requests.Session()
+        for cookie in driver.get_cookies():
+            session.cookies.set(cookie['name'], cookie['value'])
 
-        # 3. Target the Specific Upload Input
+        # Step 3: Fetch unique App-ID/Token if needed (Optional but safe)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Referer': 'https://www.naukri.com/mnjuser/profile',
+            'X-Requested-With': 'XMLHttpRequest',
+            'appid': '135',
+            'systemid': '135'
+        }
+
+        # Step 4: Final Upload via API
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
-        
-        print("Searching for Resume Upload input...")
-        # Naukri ke naye UI mein hidden input ka ID 'attachCV' hota hai
-        # Hum wait karenge jab tak ye DOM mein na aa jaye
-        try:
-            upload_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@id='attachCV' or @type='file']")))
+        if os.path.exists(resume_path):
+            print(f"API se Resume bhej raha hoon: {resume_path}")
             
-            print(f"Uploading: {resume_path}")
-            upload_input.send_keys(resume_path)
+            with open(resume_path, 'rb') as f:
+                # Naukri ka primary resume upload endpoint
+                files = {'resume': ('Resume.pdf', f, 'application/pdf')}
+                # Is URL ko Naukri ne v1/users/self/resume par update kiya hai
+                response = session.post(
+                    'https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v1/users/self/resume',
+                    headers=headers,
+                    files=files
+                )
             
-            # Success confirmation wait
-            print("Wait for upload processing...")
-            time.sleep(20) 
-            print("✅ Mission Accomplished! Resume updated.")
-            
-        except Exception as e:
-            print("Direct input nahi mila. Trying secondary method...")
-            # Agar input hidden hai toh JS se unhide karke try karenge
-            driver.execute_script("document.querySelector('input[type=\"file\"]').style.display='block';")
-            time.sleep(2)
-            driver.find_element(By.XPATH, "//input[@type='file']").send_keys(resume_path)
-            print("✅ Secondary Method Success!")
+            if response.status_code in [200, 201, 204]:
+                print("✅ Mission Success! Resume upload ho gaya.")
+            else:
+                # Retry with fallback URL v0 if v1 fails
+                print(f"v1 failed ({response.status_code}), trying v0...")
+                response_v0 = session.post(
+                    'https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/resume',
+                    headers=headers,
+                    files=files
+                )
+                if response_v0.status_code in [200, 201]:
+                    print("✅ Mission Success via v0!")
+                else:
+                    print(f"❌ Dono API fail ho gayi: {response_v0.status_code}")
+        else:
+            print("❌ Error: Resume.pdf nahi mili repo mein.")
 
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
-        driver.save_screenshot("error_debug.png")
+        print(f"❌ Error aayi: {str(e)}")
     finally:
         driver.quit()
 
