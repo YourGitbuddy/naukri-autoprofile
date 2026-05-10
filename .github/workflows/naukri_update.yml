@@ -2,7 +2,6 @@ name: Naukri Auto Refresh
 
 on:
   schedule:
-    # Daily 9:15 AM IST
     - cron: '45 3 * * *'
 
   workflow_dispatch:
@@ -35,7 +34,7 @@ jobs:
           google-chrome --version
           which google-chrome
 
-      - name: Run Naukri Refresh Script
+      - name: Run Naukri Script
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
@@ -43,7 +42,7 @@ jobs:
         run: |
           python api_update.py
 
-      - name: Upload Debug Files
+      - name: Upload Files
         if: always()
 
         uses: actions/upload-artifact@v4
@@ -57,4 +56,5 @@ jobs:
             profile_page.png
             success.png
             debug_error.png
+            cookies.pkl
             page_source.html
