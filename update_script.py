@@ -2,20 +2,21 @@ import os
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 def run_naukri_update():
     chrome_options = Options()
-    chrome_options.add_argument("--headless") # Background mein chalega
+    chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1920,1080")
-    # Real user-agent taki Akamai block na kare
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
-    driver = webdriver.Chrome(options=chrome_options)
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     wait = WebDriverWait(driver, 30)
 
     try:
@@ -23,37 +24,60 @@ def run_naukri_update():
         print("Login page khul raha hai...")
         driver.get("https://www.naukri.com/nlogin/login")
         
-        # Email aur Pass fields ka intezar
-        user_input = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
-        user_input.send_keys(os.environ['NAUKRI_EMAIL'])
+        wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
+        driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
+        driver.find_element(By.XPATH, "//button[text()='Login']").click()
         
-        pass_input = driver.find_element(By.ID, "passwordField")
-        pass_input.send_keys(os.environ['NAUKRI_PASS'])
-        
-        driver.find_element(By.XPATH, "//button[@type='submit']").click()
-        print("Login successful, profile par ja raha hoon...")
-        time.sleep(10) # Profile load hone ka time
+        print("Login ho gaya, profile par ja raha hoon...")
+        time.sleep(10)
 
-        # 2. Profile Page par jana
+        # 2. Profile Page
         driver.get("https://www.naukri.com/mnjuser/profile")
-        time.sleep(5)
+        time.sleep(7)
 
-        # 3. Summary Refresh
-        # Hum summary dhoond kar 'Save' dabayenge
-        print("Summary section dhoond raha hoon...")
-        # Pencil icon click karna
-        edit_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(@class, 'edit') or contains(@class, 'pencil')]")))
-        driver.execute_script("arguments[0].click();", edit_btn)
+        # 3. Smart Scrolling (Important)
+        # Summary niche hoti hai, isliye scroll karna zaroori hai
+        driver.execute_script("window.scrollTo(0, 500);")
+        time.sleep(2)
+
+        # 4. Trying Multiple XPATHs for Summary Edit Icon
+        print("Summary edit icon dhoond raha hoon...")
         
-        time.sleep(3)
-        # Save button dabana
-        save_btn = wait.until(EC.element_to_be_clickable((By.ID, "submitSummary")))
-        driver.execute_script("arguments[0].click();", save_btn)
-        
-        print("Mubarak ho bhai! Profile successfully update ho gayi.")
+        # Alag-alag tarike icon dhoondne ke
+        edit_paths = [
+            "//span[contains(text(), 'Profile Summary')]/following-sibling::span[contains(@class, 'edit')]",
+            "//span[contains(text(), 'Profile Summary')]/parent::div//span[contains(@class, 'edit')]",
+            "//div[contains(@class, 'summary')]//span[contains(@class, 'edit')]",
+            "//*[@id='lazyProfileSummary']//span[contains(@class, 'edit')]"
+        ]
+
+        edit_btn = None
+        for path in edit_paths:
+            try:
+                edit_btn = driver.find_element(By.XPATH, path)
+                if edit_btn.is_displayed():
+                    print(f"Icon mil gaya: {path}")
+                    break
+            except:
+                continue
+
+        if edit_btn:
+            driver.execute_script("arguments[0].click();", edit_btn)
+            time.sleep(3)
+            
+            # 5. Save Button
+            print("Save button daba raha hoon...")
+            save_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@id='submitSummary' or text()='Save']")))
+            driver.execute_script("arguments[0].click();", save_btn)
+            
+            time.sleep(3)
+            print("Mubarak ho bhai! Profile Successfully update ho gayi.")
+        else:
+            print("Maafi bhai, Summary icon nahi mila. Screenshot save kar raha hoon.")
+            driver.save_screenshot("debug_profile.png")
 
     except Exception as e:
-        print(f"Gadbad ho gayi: {str(e)}")
+        print(f"Error: {str(e)}")
     finally:
         driver.quit()
 
