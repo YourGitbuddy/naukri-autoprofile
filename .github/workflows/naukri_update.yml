@@ -2,15 +2,19 @@ name: Naukri Profile Refresh
 
 on:
   schedule:
-    - cron: '45 3 * * *' # Roz subah refresh karega
+    - cron: '45 3 * * *'
   workflow_dispatch:
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Setup Chrome
+        uses: browser-actions/setup-chrome@v1
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -18,17 +22,20 @@ jobs:
           python-version: '3.10'
 
       - name: Install Dependencies
-        run: pip install selenium webdriver-manager
+        run: |
+          pip install selenium webdriver-manager
 
-      - name: Run Easiest Refresh
+      - name: Run Script
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
         run: python api_update.py
 
       - name: Upload Debug Screenshot
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-screenshots
-          path: debug_error.png
+          name: screenshots
+          path: |
+            debug_error.png
+            success.png
