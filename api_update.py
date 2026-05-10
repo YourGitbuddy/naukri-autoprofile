@@ -2,36 +2,35 @@ import os
 import time
 
 from selenium import webdriver
+from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
+
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
-from webdriver_manager.chrome import ChromeDriverManager
 
 
 def run_refresh():
 
     chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
+
+    chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
 
-    driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=chrome_options
-    )
+    # IMPORTANT
+    chrome_options.binary_location = "/usr/bin/google-chrome"
 
-    wait = WebDriverWait(driver, 20)
+    driver = webdriver.Chrome(options=chrome_options)
+
+    wait = WebDriverWait(driver, 30)
 
     try:
 
         email = os.getenv("NAUKRI_EMAIL")
         password = os.getenv("NAUKRI_PASS")
-
-        if not email or not password:
-            raise Exception("Secrets missing!")
 
         print("Opening login page...")
 
@@ -42,29 +41,30 @@ def run_refresh():
         )
 
         driver.find_element(By.ID, "usernameField").send_keys(email)
+
         driver.find_element(By.ID, "passwordField").send_keys(password)
 
-        driver.find_element(By.XPATH, "//button[text()='Login']").click()
+        driver.find_element(
+            By.XPATH,
+            "//button[contains(text(),'Login')]"
+        ).click()
 
-        print("Waiting for login success...")
+        print("Waiting after login...")
 
-        wait.until(
-            EC.url_contains("naukri.com")
-        )
-
-        time.sleep(5)
+        time.sleep(10)
 
         driver.get("https://www.naukri.com/mnjuser/profile")
 
-        time.sleep(8)
+        time.sleep(10)
 
-        print("Trying profile refresh...")
+        print("Refreshing profile...")
 
-        js_script = """
-        let editBtns = document.querySelectorAll('span.edit');
+        js = """
+        let btns = document.querySelectorAll('span.edit');
 
-        if(editBtns.length > 0){
-            editBtns[0].click();
+        if(btns.length > 0){
+
+            btns[0].click();
 
             setTimeout(() => {
 
@@ -72,13 +72,15 @@ def run_refresh():
 
                 if(textarea){
 
-                    let val = textarea.value;
+                    textarea.value += " ";
 
-                    textarea.value = val + " ";
+                    textarea.dispatchEvent(
+                        new Event('input', { bubbles: true })
+                    );
 
-                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-
-                    let saveBtn = document.querySelector('button[type="submit"]');
+                    let saveBtn = document.querySelector(
+                        'button[type="submit"]'
+                    );
 
                     if(saveBtn){
                         saveBtn.click();
@@ -94,19 +96,22 @@ def run_refresh():
         return "FAILED";
         """
 
-        result = driver.execute_script(js_script)
+        result = driver.execute_script(js)
 
-        print("Result:", result)
-
-        time.sleep(10)
+        print(result)
 
         driver.save_screenshot("success.png")
 
+        time.sleep(5)
+
     except Exception as e:
-        print("ERROR:", str(e))
+
+        print("ERROR:", e)
+
         driver.save_screenshot("debug_error.png")
 
     finally:
+
         driver.quit()
 
 
