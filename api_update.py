@@ -2,8 +2,7 @@ import os
 import cloudscraper
 import json
 
-def run_invisible_refresh():
-    # Chrome Desktop mimic kar rahe hain
+def run_skills_refresh():
     scraper = cloudscraper.create_scraper(
         browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
     )
@@ -13,53 +12,53 @@ def run_invisible_refresh():
         "Appid": "109",
         "Systemid": "109",
         "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest",
-        "Origin": "https://www.naukri.com"
+        "X-Requested-With": "XMLHttpRequest"
     }
     
     try:
         # Step 1: Login
         print("Logging in...")
         auth_url = "https://www.naukri.com/nlogin/login"
-        login_payload = {"username": os.environ['NAUKRI_EMAIL'], "password": os.environ['NAUKRI_PASS']}
-        res = scraper.post(auth_url, json=login_payload, headers=headers)
+        payload = {"username": os.environ['NAUKRI_EMAIL'], "password": os.environ['NAUKRI_PASS']}
+        res = scraper.post(auth_url, json=payload, headers=headers)
         
         if res.status_code != 200:
             print(f"Login Failed: {res.status_code}")
             return
         
-        print("Login Success! Toggling Invisible Space...")
+        print("Login Success! Refreshing Skills...")
 
-        # Step 2: Fetch current Summary
-        summary_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary"
-        get_res = scraper.get(summary_url, headers=headers)
+        # Step 2: Fetch Profile Detail to get current skills
+        # Using the standard profile detail endpoint
+        profile_url = "https://www.naukri.com/v1/jobseeker/profile"
+        profile_res = scraper.get(profile_url, headers=headers)
         
-        if get_res.status_code == 200:
-            current_data = get_res.json()
-            summary_text = current_data.get('summary', 'Azure Infrastructure and Data Engineer')
+        if profile_res.status_code == 200:
+            profile_data = profile_res.json()
+            # Extracting current skills
+            skills = profile_data.get('profile', {}).get('keySkills', [])
             
-            # Logic: Agar last mein space hai toh hata do, nahi hai toh add kar do.
-            # Ye recruiter ko UI par bilkul nahi dikhega.
-            if summary_text.endswith(' '):
-                new_summary = summary_text.rstrip()
-                print("Removing trailing space...")
-            else:
-                new_summary = summary_text + ' '
-                print("Adding trailing space...")
+            if not skills:
+                print("No skills found. Adding a default skill to trigger update.")
+                skills = [{"skillName": "Azure"}]
             
-            # Step 3: PUT request to trigger "Updated Today"
-            update_payload = {"summary": new_summary}
-            update_res = scraper.put(summary_url, json=update_payload, headers=headers)
+            # Step 3: Trigger Update by sending the same skills back
+            # Naukri triggers 'Updated Today' whenever this PUT is successful
+            update_url = "https://www.naukri.com/v1/jobseeker/profile/keyskills"
+            update_res = scraper.put(update_url, json={"keySkills": skills}, headers=headers)
             
             if update_res.status_code in [200, 204]:
-                print("🏁 SUCCESS: Invisible update complete! Profile is now Fresh.")
+                print("🏁 SUCCESS: Skills refreshed! Profile is now Fresh.")
             else:
-                print(f"Update failed with status: {update_res.status_code}")
+                print(f"Skill Update Failed: {update_res.status_code}")
+                # Fallback: Just try a generic profile touch
+                scraper.get("https://www.naukri.com/mnjuser/profile", headers=headers)
         else:
-            print(f"Could not fetch summary: {get_res.status_code}")
+            print(f"Access Denied or Path Changed (404/403): {profile_res.status_code}")
+            print("Try refreshing your login session or checking secrets.")
 
     except Exception as e:
         print(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    run_invisible_refresh()
+    run_skills_refresh()
