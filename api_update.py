@@ -13,16 +13,42 @@ def run_refresh():
 
     options = Options()
 
+    # Headless Config
     options.add_argument("--headless=new")
+
+    # Stability
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--remote-debugging-port=9222")
 
+    # Anti Detection
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-infobars")
+
+    # SSL / Network
+    options.add_argument("--ignore-certificate-errors")
+    options.add_argument("--allow-running-insecure-content")
+    options.add_argument("--dns-prefetch-disable")
+    options.add_argument("--disable-web-security")
+    options.add_argument("--disable-features=VizDisplayCompositor")
+
+    # User Agent
+    options.add_argument(
+        "user-agent=Mozilla/5.0 "
+        "(Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 "
+        "(KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+
     print("Launching Chrome...")
 
     driver = webdriver.Chrome(options=options)
+
+    driver.set_page_load_timeout(60)
 
     print("Chrome Started Successfully")
 
@@ -38,7 +64,17 @@ def run_refresh():
 
         print("Opening login page...")
 
-        driver.get("https://www.naukri.com/nlogin/login")
+        try:
+
+            driver.get("https://www.naukri.com/nlogin/login")
+
+        except Exception as page_error:
+
+            print("PAGE LOAD ERROR:", str(page_error))
+
+            driver.save_screenshot("debug_error.png")
+
+            raise
 
         time.sleep(5)
 
@@ -50,9 +86,15 @@ def run_refresh():
 
         print("Entering credentials...")
 
-        driver.find_element(By.ID, "usernameField").send_keys(email)
+        driver.find_element(
+            By.ID,
+            "usernameField"
+        ).send_keys(email)
 
-        driver.find_element(By.ID, "passwordField").send_keys(password)
+        driver.find_element(
+            By.ID,
+            "passwordField"
+        ).send_keys(password)
 
         login_btn = driver.find_element(
             By.XPATH,
@@ -65,21 +107,25 @@ def run_refresh():
 
         time.sleep(10)
 
+        driver.save_screenshot("after_login.png")
+
         print("Opening profile page...")
 
         driver.get("https://www.naukri.com/mnjuser/profile")
 
         time.sleep(10)
 
-        print("Refreshing profile...")
+        driver.save_screenshot("profile_page.png")
 
-        js = """
+        print("Trying profile refresh...")
 
-        let btns = document.querySelectorAll('span.edit');
+        js_script = """
 
-        if(btns.length > 0){
+        let editBtns = document.querySelectorAll('span.edit');
 
-            btns[0].click();
+        if(editBtns.length > 0){
+
+            editBtns[0].click();
 
             setTimeout(() => {
 
@@ -87,18 +133,25 @@ def run_refresh():
 
                 if(textarea){
 
-                    textarea.value += " ";
+                    textarea.value =
+                        textarea.value + " ";
 
                     textarea.dispatchEvent(
-                        new Event('input', { bubbles: true })
+                        new Event(
+                            'input',
+                            { bubbles: true }
+                        )
                     );
 
-                    let saveBtn = document.querySelector(
-                        'button[type="submit"]'
-                    );
+                    let saveBtn =
+                        document.querySelector(
+                            'button[type="submit"]'
+                        );
 
                     if(saveBtn){
+
                         saveBtn.click();
+
                     }
 
                 }
@@ -111,9 +164,37 @@ def run_refresh():
         return "FAILED";
         """
 
-        result = driver.execute_script(js)
+        result = driver.execute_script(js_script)
 
         print("RESULT:", result)
+
+        # Fallback Resume Upload
+        if result != "SUCCESS":
+
+            print("Trying Resume Upload Fallback...")
+
+            try:
+
+                resume_path = os.path.join(
+                    os.getcwd(),
+                    "Resume.pdf"
+                )
+
+                upload_input = driver.find_element(
+                    By.XPATH,
+                    "//input[@type='file']"
+                )
+
+                upload_input.send_keys(resume_path)
+
+                print("Resume Uploaded Successfully!")
+
+            except Exception as upload_error:
+
+                print(
+                    "Resume Upload Failed:",
+                    str(upload_error)
+                )
 
         time.sleep(8)
 
