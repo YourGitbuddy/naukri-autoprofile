@@ -1,12 +1,14 @@
 name: Naukri Auto Refresh
+
 on:
   schedule:
-    - cron: '0 4 * * *' # Har roz subah 9:30 AM IST
-  workflow_dispatch:   # Manual button ke liye
+    - cron: '0 4 * * *' # Har roz subah 9:30 AM IST (IST = UTC + 5:30)
+  workflow_dispatch:   # Manual button se chalane ke liye
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -18,10 +20,18 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install selenium webdriver-manager
+          python -m pip install --upgrade pip
+          pip install selenium webdriver-manager requests
 
       - name: Run Profile Update Script
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
         run: python update_script.py
+
+      - name: Upload Error Screenshot (if failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-screenshot
+          path: error_debug.png
