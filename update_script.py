@@ -15,25 +15,25 @@ def run_naukri_update():
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1920,1080")
     
-    # Anti-detection flags
+    # Anti-bot detection flags
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     
-    # Bypassing navigator.webdriver detection
+    # Bypassing navigator.webdriver property
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
         "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
     })
 
-    wait = WebDriverWait(driver, 30)
+    wait = WebDriverWait(driver, 40)
 
     try:
         print("Starting Stealth Browser Login...")
         driver.get("https://www.naukri.com/nlogin/login")
         
-        # Login Process
+        # Login
         email_input = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
         email_input.send_keys(os.environ['NAUKRI_EMAIL'])
         
@@ -43,10 +43,10 @@ def run_naukri_update():
         login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
         driver.execute_script("arguments[0].click();", login_btn)
         
-        print("Login done, waiting for session...")
+        print("Login done, waiting for Dashboard...")
         time.sleep(10)
 
-        # Direct Jump to Profile
+        # Profile Page Jump
         driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(5)
 
@@ -54,21 +54,20 @@ def run_naukri_update():
         if os.path.exists(resume_path):
             print(f"Uploading Resume from: {resume_path}")
             
-            # Hidden File Input dhoondna
-            # Naukri mobile/desktop dono mein ek hidden input rakhta hai
+            # Naukri ka hidden file input dhoondna
+            # Mobile/Desktop dono mein ye locator kaam karta hai
             attach_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='file']")))
             attach_input.send_keys(resume_path)
             
-            print("Wait for upload to sync...")
+            print("Wait for upload synchronization (15s)...")
             time.sleep(15) 
             
-            # Check for success toast or just exit
-            print("SUCCESS: Profile should be refreshed now!")
+            print("SUCCESS: Resume uploaded and Profile refreshed!")
         else:
-            print("Error: Resume.pdf not found!")
+            print("Error: Resume.pdf not found in repo!")
 
     except Exception as e:
-        print(f"Failed: {str(e)}")
+        print(f"FAILED: {str(e)}")
         driver.save_screenshot("debug_error.png")
     finally:
         driver.quit()
