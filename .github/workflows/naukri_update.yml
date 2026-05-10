@@ -2,8 +2,8 @@ name: Naukri Auto Refresh
 
 on:
   schedule:
-    - cron: '45 3 * * *'  # Runs daily at 03:45 UTC
-  workflow_dispatch:     # Allows manual trigger
+    - cron: '45 3 * * *'
+  workflow_dispatch:
 
 jobs:
   refresh-profile:
@@ -38,7 +38,7 @@ jobs:
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          IMAP_HOST: ${{ secrets.IMAP_HOST }} # optional; default imap.gmail.com used in script if not provided
+          IMAP_HOST: ${{ secrets.IMAP_HOST }} # optional; defaults to imap.gmail.com in script
         run: |
           python api_update.py
 
@@ -53,7 +53,6 @@ jobs:
             login_fill_error.png
             login_fill_error.html
             otp_not_found.png
-            otp_error.png
             login_failed.png
             login_failed.html
             profile_page.png
