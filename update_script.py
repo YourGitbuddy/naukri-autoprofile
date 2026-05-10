@@ -13,49 +13,71 @@ def run_naukri_update():
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
     
-    # Mobile Emulation: Isse Akamai ko lagta hai aap phone se manually kar rahe ho
-    mobile_emulation = { "deviceName": "Nexus 5" }
-    chrome_options.add_experimental_option("mobileEmulation", mobile_emulation)
+    # Ye line automation detection ko bypass karti hai
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 30)
+    
+    # Overriding the navigator.webdriver property
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+    })
+
+    wait = WebDriverWait(driver, 40)
 
     try:
-        print("Bhai, Mobile mode mein login shuru...")
+        print("Bhai, Stealth mode mein login shuru...")
         driver.get("https://www.naukri.com/nlogin/login")
         
-        # Login
-        wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
+        # Human-like typing delay
+        user_input = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
+        user_input.send_keys(os.environ['NAUKRI_EMAIL'])
+        time.sleep(2)
         driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
         
-        # Click Login
         login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
         driver.execute_script("arguments[0].click();", login_btn)
+        
+        print("Login done, waiting for Dashboard...")
         time.sleep(10)
 
-        # Direct URL to "Attach Resume" page
-        print("Navigating directly to Resume Section...")
-        driver.get("https://www.naukri.com/mnjuser/profile?isEditResume=1")
+        # Profile page par jaao
+        driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(5)
 
-        # Upload Resume
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
         if os.path.exists(resume_path):
-            print(f"Uploading: {resume_path}")
-            # Mobile UI mein input field hamesha present hoti hai
-            attach_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='file']")))
-            attach_input.send_keys(resume_path)
+            print(f"Uploading Resume: {resume_path}")
             
-            print("Processing upload...")
-            time.sleep(15) # Wait for upload to complete
-            print("✅ Mission Accomplished! Profile refreshed.")
+            # Naukri ka hidden input dhoondne ka aakhri rasta
+            # Hum JS se input dhundenge aur seedha path bhejenge
+            script = """
+            var input = document.querySelector('input[type="file"]');
+            if(!input) {
+                input = document.querySelector('#attachCV');
+            }
+            return input;
+            """
+            file_input = driver.execute_script(script)
+            
+            if file_input:
+                file_input.send_keys(resume_path)
+                print("Wait kar raha hoon upload finish hone ka...")
+                time.sleep(20) 
+                print("✅ Mission Accomplished! Profile is now Fresh.")
+            else:
+                print("❌ Element nahi mila, screenshot le raha hoon.")
+                driver.save_screenshot("no_element.png")
         else:
-            print("❌ Resume.pdf missing in repo!")
+            print("❌ Resume.pdf missing!")
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
-        driver.save_screenshot("error_mobile.png")
+        driver.save_screenshot("final_error.png")
     finally:
         driver.quit()
 
