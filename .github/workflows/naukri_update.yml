@@ -1,41 +1,56 @@
-name: Naukri Profile Refresh
+name: Naukri Auto Refresh
 
 on:
   schedule:
+    # Daily 9:15 AM IST
     - cron: '45 3 * * *'
+
   workflow_dispatch:
 
 jobs:
-  refresh:
+  refresh-profile:
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Chrome
-        uses: browser-actions/setup-chrome@v1
-
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
+      - name: Install Google Chrome
+        uses: browser-actions/setup-chrome@v1
+
       - name: Install Dependencies
         run: |
-          pip install selenium webdriver-manager
+          python -m pip install --upgrade pip
+          pip install selenium
 
-      - name: Run Script
+      - name: Verify Chrome
+        run: |
+          google-chrome --version
+
+      - name: Run Naukri Refresh Script
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
-        run: python api_update.py
 
-      - name: Upload Debug Screenshot
+        run: |
+          python api_update.py
+
+      - name: Upload Screenshots
         if: always()
+
         uses: actions/upload-artifact@v4
+
         with:
           name: screenshots
+
           path: |
-            debug_error.png
+            opened.png
             success.png
+            debug_error.png
