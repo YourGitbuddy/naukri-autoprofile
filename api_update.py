@@ -1,5 +1,6 @@
 import os
 import time
+import pickle
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -13,29 +14,14 @@ def run_refresh():
 
     options = Options()
 
-    # Headless
-    options.add_argument("--headless=new")
+    # HEADLESS OFF
+    # options.add_argument("--headless=new")
 
-    # Stability
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("--remote-debugging-port=9222")
 
-    # Anti Detection
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-infobars")
-
-    # SSL / Network
-    options.add_argument("--ignore-certificate-errors")
-    options.add_argument("--allow-running-insecure-content")
-    options.add_argument("--dns-prefetch-disable")
-    options.add_argument("--disable-web-security")
-    options.add_argument("--disable-features=VizDisplayCompositor")
-
-    # User Agent
     options.add_argument(
         "user-agent=Mozilla/5.0 "
         "(Windows NT 10.0; Win64; x64) "
@@ -48,70 +34,96 @@ def run_refresh():
 
     driver = webdriver.Chrome(options=options)
 
-    driver.set_page_load_timeout(60)
-
-    print("Chrome Started Successfully")
-
     wait = WebDriverWait(driver, 30)
 
     try:
 
-        email = os.getenv("NAUKRI_EMAIL")
-        password = os.getenv("NAUKRI_PASS")
+        print("Opening Naukri Homepage...")
 
-        if not email or not password:
-            raise Exception("GitHub secrets missing!")
-
-        print("Opening login page...")
-
-        try:
-
-            driver.get("https://www.naukri.com/nlogin/login")
-
-        except Exception as page_error:
-
-            print("PAGE LOAD ERROR:", str(page_error))
-
-            driver.save_screenshot("debug_error.png")
-
-            raise
+        driver.get("https://www.naukri.com")
 
         time.sleep(5)
 
-        driver.save_screenshot("opened.png")
+        # COOKIE LOGIN
+        if os.path.exists("cookies.pkl"):
 
-        wait.until(
-            EC.presence_of_element_located((By.ID, "usernameField"))
-        )
+            print("Using saved cookies...")
 
-        print("Entering credentials...")
+            cookies = pickle.load(
+                open("cookies.pkl", "rb")
+            )
 
-        driver.find_element(
-            By.ID,
-            "usernameField"
-        ).send_keys(email)
+            for cookie in cookies:
 
-        driver.find_element(
-            By.ID,
-            "passwordField"
-        ).send_keys(password)
+                try:
+                    driver.add_cookie(cookie)
+                except:
+                    pass
 
-        login_btn = driver.find_element(
-            By.XPATH,
-            "//button[contains(text(),'Login')]"
-        )
+            driver.get(
+                "https://www.naukri.com/mnjuser/profile"
+            )
 
-        login_btn.click()
+            time.sleep(10)
 
-        print("Waiting after login...")
+        else:
 
-        time.sleep(10)
+            print("Manual login required...")
 
-        driver.save_screenshot("after_login.png")
+            email = os.getenv("NAUKRI_EMAIL")
+            password = os.getenv("NAUKRI_PASS")
+
+            driver.get(
+                "https://www.naukri.com/nlogin/login"
+            )
+
+            time.sleep(5)
+
+            driver.save_screenshot("opened.png")
+
+            wait.until(
+                EC.presence_of_element_located(
+                    (By.ID, "usernameField")
+                )
+            )
+
+            driver.find_element(
+                By.ID,
+                "usernameField"
+            ).send_keys(email)
+
+            driver.find_element(
+                By.ID,
+                "passwordField"
+            ).send_keys(password)
+
+            driver.find_element(
+                By.XPATH,
+                "//button[contains(text(),'Login')]"
+            ).click()
+
+            print(
+                "Complete OTP manually if asked..."
+            )
+
+            # WAIT FOR MANUAL OTP
+            time.sleep(60)
+
+            driver.save_screenshot("after_login.png")
+
+            # SAVE COOKIES
+            pickle.dump(
+                driver.get_cookies(),
+                open("cookies.pkl", "wb")
+            )
+
+            print("Cookies saved successfully!")
 
         print("Opening profile page...")
 
-        driver.get("https://www.naukri.com/mnjuser/profile")
+        driver.get(
+            "https://www.naukri.com/mnjuser/profile"
+        )
 
         time.sleep(10)
 
@@ -133,36 +145,35 @@ def run_refresh():
 
         js_script = """
 
-        function clickEditButtons(){
+        function tryEdit(){
 
-            let selectors = [
+            let allButtons =
+                document.querySelectorAll('*');
 
-                '.edit.icon',
-                'span.edit',
-                '.widgetHead .edit',
-                '.resumeHeadline .edit',
-                '.profileSummary .edit',
-                '.icon.edit',
-                '[data-ga-track*="edit"]'
+            for(let btn of allButtons){
 
-            ];
+                let text =
+                    btn.innerText || "";
 
-            for(let s of selectors){
+                let cls =
+                    btn.className || "";
 
-                let btn = document.querySelector(s);
+                if(
+                    text.toLowerCase().includes('edit') ||
+                    cls.toLowerCase().includes('edit')
+                ){
 
-                if(btn){
-
-                    btn.click();
-
-                    return true;
+                    try{
+                        btn.click();
+                        return true;
+                    }catch(e){}
                 }
             }
 
             return false;
         }
 
-        let clicked = clickEditButtons();
+        let clicked = tryEdit();
 
         if(clicked){
 
@@ -183,24 +194,20 @@ def run_refresh():
                         )
                     );
 
-                    let saveSelectors = [
+                    let buttons =
+                        document.querySelectorAll('button');
 
-                        'button[type="submit"]',
-                        '.btn-dark-ot',
-                        '.saveBtn',
-                        'button.save'
+                    for(let btn of buttons){
 
-                    ];
+                        let txt =
+                            btn.innerText || "";
 
-                    for(let s of saveSelectors){
-
-                        let btn =
-                            document.querySelector(s);
-
-                        if(btn){
+                        if(
+                            txt.toLowerCase()
+                            .includes('save')
+                        ){
 
                             btn.click();
-
                             break;
                         }
                     }
@@ -218,66 +225,7 @@ def run_refresh():
 
         print("RESULT:", result)
 
-        # Resume Upload Fallback
-        if result != "SUCCESS":
-
-            print("Trying Resume Upload Fallback...")
-
-            try:
-
-                resume_path = os.path.join(
-                    os.getcwd(),
-                    "Resume.pdf"
-                )
-
-                print("Resume Path:", resume_path)
-
-                upload_selectors = [
-
-                    "//input[@type='file']",
-                    "//input[contains(@accept,'pdf')]",
-                    "//input[contains(@class,'upload')]"
-
-                ]
-
-                uploaded = False
-
-                for selector in upload_selectors:
-
-                    try:
-
-                        upload_input = driver.find_element(
-                            By.XPATH,
-                            selector
-                        )
-
-                        upload_input.send_keys(resume_path)
-
-                        uploaded = True
-
-                        print(
-                            "Resume Uploaded Successfully!"
-                        )
-
-                        break
-
-                    except:
-                        pass
-
-                if not uploaded:
-
-                    print(
-                        "Resume upload element not found."
-                    )
-
-            except Exception as upload_error:
-
-                print(
-                    "Resume Upload Failed:",
-                    str(upload_error)
-                )
-
-        time.sleep(8)
+        time.sleep(10)
 
         driver.save_screenshot("success.png")
 
