@@ -17,59 +17,54 @@ def run_naukri_update():
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 30)
+    wait = WebDriverWait(driver, 40)
 
     try:
-        # 1. Login Process
-        print("Login page khul raha hai...")
+        # 1. Login
+        print("Naukri login shuru...")
         driver.get("https://www.naukri.com/nlogin/login")
         
         wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
         driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
         driver.find_element(By.XPATH, "//button[text()='Login']").click()
         
-        print("Login successful! Profile page par ja raha hoon...")
-        time.sleep(15) 
+        print("Login done. Profile page par ja raha hoon...")
+        time.sleep(10)
 
-        # 2. Go directly to Edit Profile
+        # 2. Profile Page
         driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(10)
 
-        # 3. Scroll Down to force load elements
-        driver.execute_script("window.scrollTo(0, 1000);")
-        print("Page scroll kar diya hai...")
-        time.sleep(5)
-
-        # 4. Target the 'Profile Summary' Edit button by text and class
-        # Naukri ke naye UI mein ye 'edit' class ke sath hota hai
-        print("Summary edit icon dhoond raha hoon...")
+        # 3. Resume Headline Edit (Ye page ke top par hota hai)
+        print("Resume Headline edit karne ki koshish...")
         
+        # 'Resume Headline' ke pass wale 'edit' icon ko dhoondna
+        # Iska XPATH zyada stable hai kyunki ye page ke shuruat mein hota hai
         try:
-            # Method 1: Find by XPATH contains text
-            edit_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Profile Summary')]/following-sibling::span[contains(@class, 'edit')] | //*[contains(text(), 'Profile Summary')]//following::span[1]")))
-            driver.execute_script("arguments[0].click();", edit_btn)
-            print("Edit button mil gaya aur click kar diya!")
-        except:
-            # Method 2: JavaScript fallback (Find all edit icons and click the second one, usually summary)
-            print("XPATH fail hua, JS fallback try kar raha hoon...")
-            driver.execute_script("document.querySelectorAll('.edit.icon')[1].click();") # Index 1 is usually Summary
-        
-        time.sleep(3)
+            edit_headline = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[text()='Resume headline']/following-sibling::span[contains(@class, 'edit')]")))
+            driver.execute_script("arguments[0].click();", edit_headline)
+            print("Headline edit box khul gaya.")
+            time.sleep(3)
 
-        # 5. Save the summary
-        print("Save button ki talash...")
-        save_btn = wait.until(EC.element_to_be_clickable((By.ID, "submitSummary")))
-        driver.execute_script("arguments[0].click();", save_btn)
+            # Save button dabana
+            save_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='Save' and @type='submit']")))
+            driver.execute_script("arguments[0].click();", save_btn)
+            print("Success! Profile status refresh ho gaya.")
         
-        print("Kaam ho gaya! Profile successfully update ho gayi.")
+        except Exception as e:
+            print("Headline button nahi mila, last attempt with generic class...")
+            # Agar upar wala fail ho toh page ke pehle 'edit' icon ko click karo
+            driver.execute_script("document.querySelector('.icon.edit').click();")
+            time.sleep(2)
+            driver.execute_script("document.querySelector('button[type=\"submit\"]').click();")
+            print("Generic click performed.")
 
     except Exception as e:
-        print(f"Abhi bhi issue hai: {str(e)}")
-        # Debugging ke liye source print kar dete hain agar fail ho toh
-        print("Current Page Title:", driver.title)
+        print(f"Error: {str(e)}")
+        # Debugging ke liye page ka HTML save kar raha hoon (log mein dikhega)
+        print("Page Content Snippet:", driver.page_source[:500])
     finally:
         driver.quit()
 
 if __name__ == "__main__":
     run_naukri_update()
-    
