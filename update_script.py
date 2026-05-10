@@ -1,68 +1,63 @@
 import os
-import cloudscraper
-import random
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 def run_naukri_update():
-    scraper = cloudscraper.create_scraper(
-        browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
-    )
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
     
-    username = os.environ['NAUKRI_EMAIL']
-    password = os.environ['NAUKRI_PASS']
-    
-    headers = {
-        'accept': 'application/json',
-        'appid': '135',
-        'systemid': '135',
-        'content-type': 'application/json',
-        'origin': 'https://www.naukri.com',
-        'referer': 'https://www.naukri.com/mnjuser/profile',
-        'x-requested-with': 'XMLHttpRequest'
-    }
+    # Mobile Emulation: Isse Akamai ko lagta hai aap phone se manually kar rahe ho
+    mobile_emulation = { "deviceName": "Nexus 5" }
+    chrome_options.add_experimental_option("mobileEmulation", mobile_emulation)
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+    wait = WebDriverWait(driver, 30)
 
     try:
-        print("Bhai, login shuru...")
-        login_res = scraper.post("https://www.naukri.com/nlogin/login", 
-                                 json={"username": username, "password": password}, 
-                                 headers=headers)
+        print("Bhai, Mobile mode mein login shuru...")
+        driver.get("https://www.naukri.com/nlogin/login")
         
-        if login_res.status_code != 200:
-            print(f"❌ Login Fail: {login_res.status_code}")
-            return
+        # Login
+        wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
+        driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
         
-        print("✅ Login Success!")
+        # Click Login
+        login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
+        driver.execute_script("arguments[0].click();", login_btn)
+        time.sleep(10)
 
-        # Step 2: Fetch existing skills
-        print("Existing skills dhoond raha hoon...")
-        profile_res = scraper.get("https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary", headers=headers)
-        
-        # Step 3: Fast Refresh via Profile Summary Update (POST instead of PUT)
-        # Hum is baar 'cloudgateway' ke bajaye seedha main domain hit karenge
-        print("Profile status refresh kar raha hoon...")
-        
-        # POST request aksar gateways easily pass kar dete hain
-        refresh_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary"
-        
-        # Hum summary mein ek chota sa change karenge
-        # "Azure Infrastructure" ke aage ek extra space ya dot
-        dot = "." if random.randint(0, 1) == 0 else " "
-        payload = {
-            "summary": f"Azure Infrastructure and Data Engineer specialized in Synapse, Bicep, and AKS{dot}"
-        }
-        
-        # Kuch cases mein POST as PUT override kaam kar jata hai
-        headers['X-HTTP-Method-Override'] = 'PUT' 
-        
-        res = scraper.post(refresh_url, json=payload, headers=headers)
-        
-        if res.status_code in [200, 201, 204]:
-            print(f"🏁 Mission Accomplished! Profile refreshed with '{dot}'")
+        # Direct URL to "Attach Resume" page
+        print("Navigating directly to Resume Section...")
+        driver.get("https://www.naukri.com/mnjuser/profile?isEditResume=1")
+        time.sleep(5)
+
+        # Upload Resume
+        resume_path = os.path.join(os.getcwd(), "Resume.pdf")
+        if os.path.exists(resume_path):
+            print(f"Uploading: {resume_path}")
+            # Mobile UI mein input field hamesha present hoti hai
+            attach_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='file']")))
+            attach_input.send_keys(resume_path)
+            
+            print("Processing upload...")
+            time.sleep(15) # Wait for upload to complete
+            print("✅ Mission Accomplished! Profile refreshed.")
         else:
-            print(f"❌ Refresh Fail: {res.status_code}")
-            print(f"Server Message: {res.text[:100]}")
+            print("❌ Resume.pdf missing in repo!")
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
+        driver.save_screenshot("error_mobile.png")
+    finally:
+        driver.quit()
 
 if __name__ == "__main__":
     run_naukri_update()
