@@ -20,7 +20,7 @@ jobs:
       - name: Install Dependencies
         run: pip install selenium webdriver-manager
 
-      - name: Run Universal Refresh
+      - name: Run Campus Refresh
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
