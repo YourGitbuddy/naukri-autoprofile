@@ -2,51 +2,61 @@ import os
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 def run_naukri_update():
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Bina window ke chalega
+    chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1920,1080")
-    
-    driver = webdriver.Chrome(options=chrome_options)
+    # Real user-agent taki block na ho
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     wait = WebDriverWait(driver, 20)
 
     try:
-        # 1. Login Page
-        print("Login kar raha hoon...")
+        print("Login page khul raha hai...")
         driver.get("https://www.naukri.com/nlogin/login")
         
-        wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
-        driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
-        driver.find_element(By.XPATH, "//button[@type='submit']").click()
+        # Username aur Password fields ka intezar
+        email_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Enter your active Email ID / Username']")))
+        email_field.send_keys(os.environ['NAUKRI_EMAIL'])
         
-        time.sleep(5) # Login hone ka intezar
+        pass_field = driver.find_element(By.XPATH, "//input[@type='password']")
+        pass_field.send_keys(os.environ['NAUKRI_PASS'])
+        
+        login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
+        login_btn.click()
+        print("Login button dabaya gaya...")
+        
+        time.sleep(7) # Login refresh hone ka time
 
-        # 2. Profile Page par jana
+        # Profile Page
         print("Profile page par ja raha hoon...")
         driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(5)
 
-        # 3. Summary Edit aur Save karna
-        # Hum summary dhoond kar sirf 'Save' dabayenge taki 'Last Updated' refresh ho jaye
+        # Summary Edit & Save
         print("Summary update kar raha hoon...")
-        edit_icon = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Profile Summary')]/following-sibling::span")))
-        edit_icon.click()
+        # Pencil icon dhoondne ke liye generic XPATH
+        edit_icon = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(@class, 'edit') or contains(@class, 'pencil')]")))
+        driver.execute_script("arguments[0].click();", edit_icon) # JavaScript click zyada stable hota hai
         
-        time.sleep(2)
-        save_btn = wait.until(EC.element_to_be_clickable((By.ID, "submitSummary")))
-        save_btn.click()
+        time.sleep(3)
+        # 'Save' button summary ke liye
+        save_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='Save' or @id='submitSummary']")))
+        driver.execute_script("arguments[0].click();", save_btn)
         
-        print("Mubarak ho bhai! Profile successfully update ho gayi.")
+        print("Mubarak ho bhai! Profile Successfully refresh ho gayi.")
 
     except Exception as e:
         print(f"Gadbad ho gayi: {str(e)}")
-        driver.save_screenshot("error.png") # Debugging ke liye
     finally:
         driver.quit()
 
