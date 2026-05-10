@@ -3,7 +3,7 @@ import cloudscraper
 import json
 
 def run_naukri_update():
-    # Android App Simulator
+    # Mobile App Simulation
     scraper = cloudscraper.create_scraper(
         browser={'browser': 'chrome', 'platform': 'android', 'desktop': False}
     )
@@ -11,7 +11,7 @@ def run_naukri_update():
     username = os.environ['NAUKRI_EMAIL']
     password = os.environ['NAUKRI_PASS']
     
-    # Headers - Content-Type yahan nahi likhenge kyunki file upload hai
+    # Ye headers legacy app ke hain jo server easily bypass hone dete hain
     headers = {
         "User-Agent": "Naukri/14.2 (Android 13; Pixel 7 Pro)",
         "Systemid": "109",
@@ -20,7 +20,7 @@ def run_naukri_update():
     }
 
     try:
-        print("Bhai, Resume Upload Mission shuru...")
+        print("Bhai, Final Attempt: Resume Sync Mission shuru...")
         
         # Step 1: Login
         login_res = scraper.post("https://www.naukri.com/nlogin/login", 
@@ -31,41 +31,44 @@ def run_naukri_update():
             print(f"❌ Login Fail: {login_res.status_code}")
             return
         
-        print("✅ Login Success! Session active hai.")
+        print("✅ Login Success!")
 
-        # Step 2: Resume Upload Path
+        # Step 2: Resume Path
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
         
         if os.path.exists(resume_path):
-            # Naukri ke do sabse stable endpoints
-            urls = [
-                "https://www.naukri.com/v1/jobseeker/profile/resume",
-                "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v1/users/self/resume"
-            ]
+            # Sabse stable endpoint jo 'Whitelabel Error' nahi deta
+            upload_url = "https://www.naukri.com/v2/jobseeker/profile/resume"
             
-            success = False
-            for url in urls:
-                print(f"Trying upload on: {url}")
+            print(f"Uploading Resume to Mobile-V2 endpoint...")
+            
+            with open(resume_path, 'rb') as f:
+                # 'files' parameter requests mein automatically sahi boundary banata hai
+                files = {
+                    'resume': ('Resume.pdf', f, 'application/pdf')
+                }
+                # Hum headers mein Content-Type nahi bhejenge taaki boundary mismatch na ho
+                res = scraper.post(upload_url, headers=headers, files=files)
+            
+            if res.status_code in [200, 201, 204]:
+                print("🏁 Mission Accomplished! Resume Fresh ho gaya.")
+            else:
+                print(f"❌ V2 Endpoint failed ({res.status_code}). Trying Legacy Upload...")
+                # Last resort legacy URL
+                legacy_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v1/users/self/resume"
                 with open(resume_path, 'rb') as f:
-                    files = {'resume': ('Resume.pdf', f, 'application/pdf')}
-                    # Note: Yahan headers mein 'Content-Type' nahi bhejenge
-                    res = scraper.post(url, headers=headers, files=files)
+                    res_legacy = scraper.post(legacy_url, headers=headers, files={'resume': ('Resume.pdf', f, 'application/pdf')})
                 
-                if res.status_code in [200, 201, 204]:
-                    print(f"🏁 Mission Accomplished! Resume uploaded via {url.split('/')[-1]}")
-                    success = True
-                    break
+                if res_legacy.status_code in [200, 201]:
+                    print("🏁 Mission Accomplished via Legacy Route!")
                 else:
-                    print(f"❌ Failed on this URL (Status: {res.status_code})")
-            
-            if not success:
-                print("❌ Dono endpoints fail ho gaye. Response Check karo.")
-                print(f"Last Response: {res.text[:150]}")
+                    print(f"❌ Final Fail. Status: {res_legacy.status_code}")
+                    print(f"Server says: {res_legacy.text[:100]}")
         else:
-            print("❌ Error: Resume.pdf nahi mili root folder mein!")
+            print("❌ Error: Resume.pdf missing!")
 
     except Exception as e:
-        print(f"❌ Critical Error: {str(e)}")
+        print(f"❌ Error: {str(e)}")
 
 if __name__ == "__main__":
     run_naukri_update()
