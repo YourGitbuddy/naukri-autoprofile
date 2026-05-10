@@ -11,7 +11,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 def run_naukri_update():
-    # Dynamic dot ya space add karne ke liye taaki content har baar badle
     toggle = "." if random.randint(0, 1) == 0 else "" 
     current_time = datetime.now().strftime("%d %b %Y")
     
@@ -29,36 +28,43 @@ def run_naukri_update():
     wait = WebDriverWait(driver, 45)
 
     try:
-        print("Bypass start...")
+        print("Bypass start: Google par ja raha hoon...")
         driver.get("https://www.google.com")
         time.sleep(2)
 
-        print("Naukri login...")
+        print("Naukri login page load kar raha hoon...")
         driver.get("https://www.naukri.com/nlogin/login")
         
-        wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
-        driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
-        driver.find_element(By.XPATH, "//button[text()='Login']").click()
+        # Element ka wait karenge
+        email_field = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
         
-        print("Login done. Waiting for session...")
+        # JS se value set karenge (Interactable error bypass karne ke liye)
+        print("JavaScript se credentials fill kar raha hoon...")
+        driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
+        driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
+        
+        time.sleep(2)
+        # Login button par click
+        login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
+        driver.execute_script("arguments[0].click();", login_btn)
+        
+        print("Login button dabaya gaya. Waiting for session setup...")
         time.sleep(15)
 
-        # Content for update
-        # Headline update sabse powerful hai date refresh karne ke liye
+        # Content Update Logic
         headline = f"Azure Infrastructure and Data Engineer | Synapse | Bicep | AKS{toggle}"
         summary = f"Azure Infrastructure Engineer specializing in Synapse, Bicep, and AKS. (Last updated: {current_time})"
 
-        print("Force Refreshing Headline and Summary via API...")
-        
+        print("Force Refreshing via API...")
         driver.execute_script(f"""
-            // 1. Update Resume Headline (Status change ke liye sabse best)
+            // Resume Headline update
             fetch('https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/resume-headline', {{
                 method: 'PUT',
                 headers: {{ 'Content-Type': 'application/json', 'appid': '135', 'systemid': '135' }},
                 body: JSON.stringify({{ "resumeHeadline": "{headline}" }})
             }});
 
-            // 2. Update Profile Summary
+            // Profile Summary update
             fetch('https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary', {{
                 method: 'PUT',
                 headers: {{ 'Content-Type': 'application/json', 'appid': '135', 'systemid': '135' }},
@@ -66,11 +72,12 @@ def run_naukri_update():
             }});
         """)
         
-        print(f"Success! Headline updated with toggle '{toggle}'")
+        print(f"Success! Profile refreshed with toggle '{toggle}'")
         time.sleep(5)
 
     except Exception as e:
         print(f"Error: {str(e)}")
+        driver.save_screenshot("error_debug.png") # Debugging ke liye screenshot
     finally:
         driver.quit()
 
