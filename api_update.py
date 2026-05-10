@@ -159,4 +159,199 @@ def run_refresh():
             wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
             u_field = driver.find_element(By.ID, "usernameField")
             p_field = driver.find_element(By.ID, "passwordField")
-            u_field
+            u_field.clear()
+            u_field.send_keys(naukri_email)
+            p_field.clear()
+            p_field.send_keys(naukri_pass)
+
+            login_btn = None
+            try:
+                login_btn = wait.until(EC.element_to_be_clickable(
+                    (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'login') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'sign in') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'log in')]")
+                ))
+            except:
+                buttons = driver.find_elements(By.TAG_NAME, "button")
+                if buttons:
+                    login_btn = buttons[0]
+            if login_btn:
+                login_btn.click()
+            else:
+                raise Exception("Login button not found")
+        except Exception as e:
+            print("Error during filling login form:", str(e))
+            dump_page_debug(driver, "login_fill_error")
+            raise
+
+        # Save immediate debug artifacts after clicking login
+        time.sleep(6)
+        dump_page_debug(driver, "after_login")
+
+        # Detect OTP prompt or direct login success
+        logged_in = False
+        try:
+            # If profile URL appears quickly, consider logged in
+            wait.until(EC.url_contains("/mnjuser/profile"))
+            logged_in = True
+        except:
+            # Not redirected yet; dump page and look for OTP
+            dump_page_debug(driver, "after_login_check")
+            otp_selectors = [
+                "input[placeholder*='OTP']",
+                "input[placeholder*='Enter OTP']",
+                "input[type='tel']",
+                "input[name*='otp']",
+                "input[id*='otp']"
+            ]
+            otp_found = None
+            for sel in otp_selectors:
+                try:
+                    elems = driver.find_elements(By.CSS_SELECTOR, sel)
+                    if elems:
+                        otp_found = sel
+                        break
+                except:
+                    continue
+
+            if otp_found and imap_user and imap_pass:
+                print("OTP prompt detected, fetching OTP from email...")
+                otp = fetch_latest_otp(imap_host, imap_user, imap_pass, timeout=120)
+                if otp:
+                    print("OTP fetched (masked):", otp[:2] + "*"*(len(otp)-2))
+                    try:
+                        inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='tel'], input[type='text'], input")
+                        filled = False
+                        for inp in inputs:
+                            try:
+                                if inp.is_displayed() and inp.is_enabled():
+                                    inp.clear()
+                                    inp.send_keys(otp)
+                                    filled = True
+                                    break
+                            except:
+                                continue
+                        if not filled:
+                            inp = driver.find_element(By.CSS_SELECTOR, otp_found)
+                            inp.clear()
+                            inp.send_keys(otp)
+                    except Exception as e:
+                        print("Error filling OTP into single input:", e)
+                        try:
+                            digit_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='tel'], input.otp, input[class*='otp']")
+                            for i, ch in enumerate(otp):
+                                if i < len(digit_inputs):
+                                    try:
+                                        digit_inputs[i].clear()
+                                        digit_inputs[i].send_keys(ch)
+                                    except:
+                                        pass
+                        except:
+                            pass
+
+                    try:
+                        verify_btn = None
+                        try:
+                            verify_btn = driver.find_element(By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'verify') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'submit') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'continue')]")
+                        except:
+                            buttons = driver.find_elements(By.TAG_NAME, "button")
+                            if buttons:
+                                verify_btn = buttons[-1]
+                        if verify_btn:
+                            verify_btn.click()
+                            time.sleep(6)
+                            dump_page_debug(driver, "after_otp_click")
+                            try:
+                                wait.until(EC.url_contains("/mnjuser/profile"))
+                                logged_in = True
+                            except:
+                                logged_in = False
+                        else:
+                            print("Verify button not found after OTP fill.")
+                    except Exception as e:
+                        print("Error clicking verify:", e)
+                else:
+                    print("OTP not found within timeout.")
+                    dump_page_debug(driver, "otp_not_found")
+            else:
+                logged_in = False
+
+        if not logged_in:
+            print("Login failed, still on login page or unexpected page.")
+            dump_page_debug(driver, "login_failed")
+            # Exit with non-zero so workflow marks failure clearly
+            sys.exit(2)
+        else:
+            print("Login successful, proceeding to profile refresh.")
+
+        # Navigate to profile page to be safe
+        driver.get("https://www.naukri.com/mnjuser/profile")
+        time.sleep(5)
+        dump_page_debug(driver, "profile_page")
+
+        if "/mnjuser/profile" not in driver.current_url:
+            print("Not on profile page; skipping JS refresh.")
+            dump_page_debug(driver, "not_on_profile")
+            sys.exit(3)
+
+        print("Trying profile refresh...")
+
+        js_script = """
+        function tryEdit(){
+            let profileContainer = document.querySelector('.profile-container') || document.body;
+            let allButtons = profileContainer.querySelectorAll('button, a');
+            for(let btn of allButtons){
+                let text = (btn.innerText || '').toLowerCase();
+                let cls = (btn.className || '').toLowerCase();
+                if(text.includes('edit') || cls.includes('edit') || text.includes('update')){
+                    try{ btn.click(); return true; }catch(e){}
+                }
+            }
+            return false;
+        }
+
+        let clicked = tryEdit();
+
+        if(clicked){
+            setTimeout(() => {
+                let textarea = document.querySelector('textarea');
+                if(textarea){
+                    textarea.value = textarea.value + " ";
+                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                    let buttons = document.querySelectorAll('button');
+                    for(let btn of buttons){
+                        let txt = (btn.innerText || '').toLowerCase();
+                        if(txt.includes('save') || txt.includes('update')){
+                            try{ btn.click(); }catch(e){}
+                            break;
+                        }
+                    }
+                }
+            }, 2000);
+            return "SUCCESS";
+        }
+        return "FAILED";
+        """
+
+        result = driver.execute_script(js_script)
+        print("RESULT:", result)
+
+        time.sleep(8)
+        dump_page_debug(driver, "success")
+        print("Profile refresh completed.")
+
+    except SystemExit as se:
+        # re-raise to preserve exit code
+        raise
+    except Exception as e:
+        print("ERROR:", str(e))
+        traceback.print_exc()
+        dump_page_debug(driver, "debug_error")
+        # ensure non-zero exit
+        sys.exit(1)
+    finally:
+        try:
+            driver.quit()
+        except:
+            pass
+
+if __name__ == "__main__":
+    run_refresh()
