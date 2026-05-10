@@ -1,64 +1,83 @@
 import os
-import cloudscraper
-import json
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-def run_skills_refresh():
-    scraper = cloudscraper.create_scraper(
-        browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
-    )
+def run_stealth_refresh():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Appid": "109",
-        "Systemid": "109",
-        "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-    }
+    # Stealth Settings
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     
+    # Bypass Webdriver Detection
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+    })
+
+    wait = WebDriverWait(driver, 40)
+
     try:
-        # Step 1: Login
-        print("Logging in...")
-        auth_url = "https://www.naukri.com/nlogin/login"
-        payload = {"username": os.environ['NAUKRI_EMAIL'], "password": os.environ['NAUKRI_PASS']}
-        res = scraper.post(auth_url, json=payload, headers=headers)
+        print("Bhai, Login page load kar raha hoon...")
+        driver.get("https://www.naukri.com/nlogin/login")
         
-        if res.status_code != 200:
-            print(f"Login Failed: {res.status_code}")
-            return
+        # Login
+        wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
+        driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
+        driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[text()='Login']"))
         
-        print("Login Success! Refreshing Skills...")
+        print("Login done, profile par ja raha hoon...")
+        time.sleep(10)
+        
+        # Go to Profile
+        driver.get("https://www.naukri.com/mnjuser/profile")
+        time.sleep(5)
 
-        # Step 2: Fetch Profile Detail to get current skills
-        # Using the standard profile detail endpoint
-        profile_url = "https://www.naukri.com/v1/jobseeker/profile"
-        profile_res = scraper.get(profile_url, headers=headers)
+        # Update Resume Headline (This is the most stable element)
+        print("Refreshing via Resume Headline...")
         
-        if profile_res.status_code == 200:
-            profile_data = profile_res.json()
-            # Extracting current skills
-            skills = profile_data.get('profile', {}).get('keySkills', [])
-            
-            if not skills:
-                print("No skills found. Adding a default skill to trigger update.")
-                skills = [{"skillName": "Azure"}]
-            
-            # Step 3: Trigger Update by sending the same skills back
-            # Naukri triggers 'Updated Today' whenever this PUT is successful
-            update_url = "https://www.naukri.com/v1/jobseeker/profile/keyskills"
-            update_res = scraper.put(update_url, json={"keySkills": skills}, headers=headers)
-            
-            if update_res.status_code in [200, 204]:
-                print("🏁 SUCCESS: Skills refreshed! Profile is now Fresh.")
-            else:
-                print(f"Skill Update Failed: {update_res.status_code}")
-                # Fallback: Just try a generic profile touch
-                scraper.get("https://www.naukri.com/mnjuser/profile", headers=headers)
+        # 1. Edit button click (Headline section)
+        edit_icon = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[text()='Resume headline']/following-sibling::span[contains(@class,'edit')]")))
+        driver.execute_script("arguments[0].click();", edit_icon)
+        
+        # 2. Headline text box
+        headline_box = wait.until(EC.presence_of_element_located((By.ID, "resumeHeadlineTxt")))
+        current_headline = headline_box.get_attribute("value")
+        
+        # 3. Toggle Dot (.)
+        if current_headline.endswith('.'):
+            new_headline = current_headline[:-1]
         else:
-            print(f"Access Denied or Path Changed (404/403): {profile_res.status_code}")
-            print("Try refreshing your login session or checking secrets.")
+            new_headline = current_headline + '.'
+            
+        headline_box.clear()
+        headline_box.send_keys(new_headline)
+        
+        # 4. Save
+        save_btn = driver.find_element(By.XPATH, "//button[text()='Save']")
+        driver.execute_script("arguments[0].click();", save_btn)
+        
+        print(f"🏁 MISSION ACCOMPLISHED: Headline updated to trigger freshness!")
+        time.sleep(5)
 
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"❌ Failed: {str(e)}")
+        driver.save_screenshot("debug_error.png")
+    finally:
+        driver.quit()
 
 if __name__ == "__main__":
-    run_skills_refresh()
+    run_stealth_refresh()
