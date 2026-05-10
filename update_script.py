@@ -1,54 +1,54 @@
-import requests
 import os
-import json
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-# GitHub Secrets se cookie uthayega
-cookie = os.getenv('NAUKRI_COOKIE')
+def run_naukri_update():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Bina window ke chalega
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
+    
+    driver = webdriver.Chrome(options=chrome_options)
+    wait = WebDriverWait(driver, 20)
 
-if not cookie:
-    print("Error: NAUKRI_COOKIE secret nahi mila. Pehle use GitHub mein add karo.")
-    exit(1)
+    try:
+        # 1. Login Page
+        print("Login kar raha hoon...")
+        driver.get("https://www.naukri.com/nlogin/login")
+        
+        wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
+        driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
+        driver.find_element(By.XPATH, "//button[@type='submit']").click()
+        
+        time.sleep(5) # Login hone ka intezar
 
-# Naukri Campus ka exact API URL jo aapke screenshot mein tha
-# Hum isi URL par PUT request bhejenge profile update karne ke liye
-url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-complete?flowId=mobile-mnj"
+        # 2. Profile Page par jana
+        print("Profile page par ja raha hoon...")
+        driver.get("https://www.naukri.com/mnjuser/profile")
+        time.sleep(5)
 
-headers = {
-    "accept": "application/json, text/plain, */*",
-    "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
-    "cookie": cookie,
-    "appid": "801",
-    "systemid": "801",
-    "content-type": "application/json",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-    "origin": "https://www.naukri.com",
-    "referer": "https://www.naukri.com/mnjuser/profile"
-}
+        # 3. Summary Edit aur Save karna
+        # Hum summary dhoond kar sirf 'Save' dabayenge taki 'Last Updated' refresh ho jaye
+        print("Summary update kar raha hoon...")
+        edit_icon = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Profile Summary')]/following-sibling::span")))
+        edit_icon.click()
+        
+        time.sleep(2)
+        save_btn = wait.until(EC.element_to_be_clickable((By.ID, "submitSummary")))
+        save_btn.click()
+        
+        print("Mubarak ho bhai! Profile successfully update ho gayi.")
 
-# Ye wahi data hai jo aapke screenshot ke 'Preview' mein dikh raha tha
-# Ismein hum bas summary ko refresh kar rahe hain
-payload = {
-    "jobseekerData": {
-        "resumeMakerPersonalDetails": {
-            "summary": "Azure Infrastructure Engineer with experience in Synapse and AKS."
-        }
-    }
-}
+    except Exception as e:
+        print(f"Gadbad ho gayi: {str(e)}")
+        driver.save_screenshot("error.png") # Debugging ke liye
+    finally:
+        driver.quit()
 
-try:
-    # Update ke liye PUT request bhej rahe hain
-    response = requests.put(url, headers=headers, data=json.dumps(payload))
-
-    if response.status_code == 200 or response.status_code == 201:
-        print(f"Mubarak ho bhai! Status {response.status_code}: Profile successfully refresh ho gayi.")
-    elif response.status_code == 404:
-        print("Error 404: URL abhi bhi galat hai. Hum POST method try karte hain...")
-        # Agar PUT fail hota hai toh POST try karega
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
-        print(f"POST Attempt Status: {response.status_code}")
-    else:
-        print(f"Update fail ho gaya. Status Code: {response.status_code}")
-        print("Response Text:", response.text)
-
-except Exception as e:
-    print(f"Kuch gadbad ho gayi: {e}")
+if __name__ == "__main__":
+    run_naukri_update()
