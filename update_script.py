@@ -1,38 +1,76 @@
-Run python update_script.py
-  python update_script.py
-  shell: /usr/bin/bash -e {0}
-  env:
-    pythonLocation: /opt/hostedtoolcache/Python/3.9.25/x64
-    PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.9.25/x64/lib/pkgconfig
-    Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.9.25/x64
-    Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.9.25/x64
-    Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.9.25/x64
-    LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.9.25/x64/lib
-    NAUKRI_EMAIL: ***
-    NAUKRI_PASS: 
-  
-Bypass start: Google par ja raha hoon...
-Naukri login shuru...
-Login button dabaya gaya...
-Direct JavaScript refresh try kar raha hoon...
-Error: Message: javascript error: json is not defined
-  (Session info: chrome=147.0.7727.55)
-Stacktrace:
-#0 0x55c8f913579a <unknown>
-#1 0x55c8f8b31215 <unknown>
-#2 0x55c8f8b380c8 <unknown>
-#3 0x55c8f8b3abfb <unknown>
-#4 0x55c8f8bcd8f9 <unknown>
-#5 0x55c8f8bcc7d0 <unknown>
-#6 0x55c8f8b7755f <unknown>
-#7 0x55c8f8b78321 <unknown>
-#8 0x55c8f90f906b <unknown>
-#9 0x55c8f90fc01d <unknown>
-#10 0x55c8f90e5718 <unknown>
-#11 0x55c8f90fcbb0 <unknown>
-#12 0x55c8f90cc150 <unknown>
-#13 0x55c8f91225e8 <unknown>
-#14 0x55c8f91227b8 <unknown>
-#15 0x55c8f91341de <unknown>
-#16 0x7f476cc9caa4 <unknown>
-#17 0x7f476cd29c6c <unknown>
+import os
+import time
+import random
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+def run_naukri_update():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+    
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+    })
+
+    wait = WebDriverWait(driver, 45)
+
+    try:
+        print("Bypass start: Google par ja raha hoon...")
+        driver.get("https://www.google.com")
+        time.sleep(random.randint(2, 4))
+
+        print("Naukri login shuru...")
+        driver.get("https://www.naukri.com/nlogin/login")
+        time.sleep(random.randint(5, 7))
+        
+        user_input = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
+        user_input.send_keys(os.environ['NAUKRI_EMAIL'])
+        
+        pass_input = driver.find_element(By.ID, "passwordField")
+        pass_input.send_keys(os.environ['NAUKRI_PASS'])
+        
+        driver.find_element(By.XPATH, "//button[text()='Login']").click()
+        print("Login button dabaya gaya... session setup ka wait kar raha hoon.")
+        time.sleep(15)
+
+        print("Direct JavaScript refresh try kar raha hoon...")
+        driver.execute_script("""
+            fetch('https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary', {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'appid': '135', 
+                    'systemid': '135' 
+                },
+                body: JSON.stringify({ 
+                    "summary": "Azure Infrastructure Engineer | Expert in Azure Synapse, Bicep, and Kubernetes (AKS). Dedicated to building secure and scalable FinCrime data platforms." 
+                })
+            }).then(res => {
+                console.log('Update Status:', res.status);
+            });
+        """)
+        
+        print("Kaam ho gaya! Script successfully execute ho gayi.")
+        time.sleep(5)
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
+    finally:
+        driver.quit()
+
+if __name__ == "__main__":
+    run_naukri_update()
