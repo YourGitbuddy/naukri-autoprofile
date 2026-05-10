@@ -1,6 +1,8 @@
 import os
 import time
-import pickle
+import re
+import imaplib
+import email
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -11,6 +13,64 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from webdriver_manager.chrome import ChromeDriverManager
+
+def fetch_latest_otp(imap_host, user, password, timeout=90):
+    """
+    Connect to IMAP, search recent unseen mails for a 6-digit OTP, return OTP or None.
+    Retries until timeout (seconds).
+    """
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        try:
+            m = imaplib.IMAP4_SSL(imap_host)
+            m.login(user, password)
+            m.select("INBOX")
+            # Prefer unseen messages; fallback to ALL if none
+            typ, data = m.search(None, '(UNSEEN)')
+            ids = data[0].split()
+            if not ids:
+                typ, data = m.search(None, 'ALL')
+                ids = data[0].split()
+            for msgid in reversed(ids):
+                typ, msg_data = m.fetch(msgid, '(RFC822)')
+                if not msg_data or not msg_data[0]:
+                    continue
+                raw = msg_data[0][1]
+                msg = email.message_from_bytes(raw)
+                body = ""
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        ctype = part.get_content_type()
+                        disp = str(part.get("Content-Disposition"))
+                        if ctype == "text/plain" and "attachment" not in disp:
+                            payload = part.get_payload(decode=True)
+                            if payload:
+                                body = payload.decode(errors='ignore')
+                                break
+                else:
+                    payload = msg.get_payload(decode=True)
+                    if payload:
+                        body = payload.decode(errors='ignore')
+                if not body:
+                    # try subject too
+                    subj = msg.get("Subject", "")
+                    body = subj
+                m_otp = re.search(r'\b(\d{4,6})\b', body)  # 4-6 digit OTPs
+                if m_otp:
+                    otp = m_otp.group(1)
+                    try:
+                        m.logout()
+                    except:
+                        pass
+                    return otp
+            try:
+                m.logout()
+            except:
+                pass
+        except Exception as e:
+            print("IMAP read error:", e)
+        time.sleep(3)
+    return None
 
 def run_refresh():
     options = Options()
@@ -42,29 +102,36 @@ def run_refresh():
     wait = WebDriverWait(driver, 30)
 
     try:
-        email = os.getenv("NAUKRI_EMAIL")
+        email_user = os.getenv("NAUKRI_EMAIL")
         password = os.getenv("NAUKRI_PASS")
+        imap_user = os.getenv("EMAIL_USER")
+        imap_pass = os.getenv("EMAIL_PASS")
+        imap_host = os.getenv("IMAP_HOST", "imap.gmail.com")
 
-        if not email or not password:
-            raise Exception("GitHub secrets missing!")
+        if not email_user or not password:
+            raise Exception("NAUKRI_EMAIL or NAUKRI_PASS missing in environment")
 
-        # Always start from login page and perform login
+        # Start at login page and perform login every run
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(2)
 
         # Fill credentials and click login
         try:
             wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
-            driver.find_element(By.ID, "usernameField").clear()
-            driver.find_element(By.ID, "usernameField").send_keys(email)
-            driver.find_element(By.ID, "passwordField").clear()
-            driver.find_element(By.ID, "passwordField").send_keys(password)
-            # click login button (try multiple possible texts)
+            u_field = driver.find_element(By.ID, "usernameField")
+            p_field = driver.find_element(By.ID, "passwordField")
+            u_field.clear()
+            u_field.send_keys(email_user)
+            p_field.clear()
+            p_field.send_keys(password)
+
+            # Try to click login button robustly
             login_btn = None
             try:
-                login_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Login') or contains(., 'Sign in') or contains(., 'Log in')]")))
+                login_btn = wait.until(EC.element_to_be_clickable(
+                    (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'login') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'sign in') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'log in')]")
+                ))
             except:
-                # fallback: first button on form
                 buttons = driver.find_elements(By.TAG_NAME, "button")
                 if buttons:
                     login_btn = buttons[0]
@@ -85,27 +152,105 @@ def run_refresh():
         with open("after_login.html", "w", encoding="utf-8") as f:
             f.write(driver.page_source)
 
-        # Robust login detection: wait for profile URL or profile-specific element
+        # Detect OTP prompt or direct login success
         logged_in = False
         try:
+            # If profile URL appears quickly, consider logged in
             wait_long = WebDriverWait(driver, 30)
             wait_long.until(EC.url_contains("/mnjuser/profile"))
             logged_in = True
         except:
-            try:
-                # look for profile-specific selectors (adjust if site uses different classes)
-                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".mnjuserName, .userName, a.logout, .profile-container")))
-                logged_in = True
-            except:
+            # Check for OTP input presence
+            otp_selectors = [
+                "input[placeholder*='OTP']",
+                "input[placeholder*='Enter OTP']",
+                "input[type='tel']",
+                "input[name*='otp']",
+                "input[id*='otp']"
+            ]
+            otp_found = None
+            for sel in otp_selectors:
+                try:
+                    if driver.find_elements(By.CSS_SELECTOR, sel):
+                        otp_found = sel
+                        break
+                except:
+                    continue
+
+            if otp_found and imap_user and imap_pass:
+                print("OTP prompt detected, fetching OTP from email...")
+                otp = fetch_latest_otp(imap_host, imap_user, imap_pass, timeout=90)
+                if otp:
+                    print("OTP fetched:", otp)
+                    # Try single input first
+                    try:
+                        # prefer a visible input
+                        inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='tel'], input[type='text'], input")
+                        # try to find the first visible input
+                        filled = False
+                        for inp in inputs:
+                            try:
+                                if inp.is_displayed() and inp.is_enabled():
+                                    inp.clear()
+                                    inp.send_keys(otp)
+                                    filled = True
+                                    break
+                            except:
+                                continue
+                        if not filled:
+                            # fallback: use the selector we detected
+                            inp = driver.find_element(By.CSS_SELECTOR, otp_found)
+                            inp.clear()
+                            inp.send_keys(otp)
+                    except Exception as e:
+                        print("Error filling OTP into single input:", e)
+                        # try per-digit inputs
+                        try:
+                            digit_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='tel'], input.otp, input[class*='otp']")
+                            for i, ch in enumerate(otp):
+                                if i < len(digit_inputs):
+                                    try:
+                                        digit_inputs[i].clear()
+                                        digit_inputs[i].send_keys(ch)
+                                    except:
+                                        pass
+                        except:
+                            pass
+
+                    # Click verify/submit
+                    try:
+                        verify_btn = None
+                        try:
+                            verify_btn = driver.find_element(By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'verify') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'submit') or contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'continue')]")
+                        except:
+                            buttons = driver.find_elements(By.TAG_NAME, "button")
+                            if buttons:
+                                verify_btn = buttons[-1]
+                        if verify_btn:
+                            verify_btn.click()
+                            time.sleep(5)
+                            # check if profile URL now present
+                            try:
+                                wait_long.until(EC.url_contains("/mnjuser/profile"))
+                                logged_in = True
+                            except:
+                                logged_in = False
+                        else:
+                            print("Verify button not found after OTP fill.")
+                    except Exception as e:
+                        print("Error clicking verify:", e)
+                else:
+                    print("OTP not found within timeout.")
+                    driver.save_screenshot("otp_not_found.png")
+            else:
+                # No OTP detected and not on profile page
                 logged_in = False
 
         if not logged_in:
             print("Login failed, still on login page or unexpected page.")
-            # Save extra debug info
             driver.save_screenshot("login_failed.png")
             with open("login_failed.html", "w", encoding="utf-8") as f:
                 f.write(driver.page_source)
-            # Stop further actions since we are not authenticated
             return
         else:
             print("Login successful, proceeding to profile refresh.")
@@ -117,7 +262,7 @@ def run_refresh():
         with open("page_source.html", "w", encoding="utf-8") as f:
             f.write(driver.page_source)
 
-        # Only run the edit/save JS if we are on the profile page
+        # Ensure we are on profile page before running JS
         if "/mnjuser/profile" not in driver.current_url:
             print("Not on profile page; skipping JS refresh.")
             return
