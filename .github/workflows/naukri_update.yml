@@ -1,15 +1,25 @@
-name: Naukri Auto Update
+name: Naukri Auto Refresh
 on:
   schedule:
-    - cron: '0 */4 * * *' # Har 4 ghante mein chalega
-  workflow_dispatch:
+    - cron: '0 4 * * *' # Ye har roz subah chalega (IST ke hisaab se)
+  workflow_dispatch:   # Isse aap "Run Workflow" button daba kar khud bhi check kar sakte hain
 
 jobs:
-  run-update:
+  refresh-profile:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install requests
+
       - name: Run Script
         env:
           NAUKRI_COOKIE: ${{ secrets.NAUKRI_COOKIE }}
-        run: python update.py
+        run: python update_script.py
