@@ -4,7 +4,6 @@ import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -12,18 +11,20 @@ from selenium.webdriver.support import expected_conditions as EC
 
 def run_refresh():
 
-    chrome_options = Options()
+    options = Options()
 
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--remote-debugging-port=9222")
 
-    # IMPORTANT
-    chrome_options.binary_location = "/usr/bin/google-chrome"
+    print("Launching Chrome...")
 
-    driver = webdriver.Chrome(options=chrome_options)
+    driver = webdriver.Chrome(options=options)
+
+    print("Chrome Started Successfully")
 
     wait = WebDriverWait(driver, 30)
 
@@ -32,26 +33,39 @@ def run_refresh():
         email = os.getenv("NAUKRI_EMAIL")
         password = os.getenv("NAUKRI_PASS")
 
+        if not email or not password:
+            raise Exception("GitHub secrets missing!")
+
         print("Opening login page...")
 
         driver.get("https://www.naukri.com/nlogin/login")
+
+        time.sleep(5)
+
+        driver.save_screenshot("opened.png")
 
         wait.until(
             EC.presence_of_element_located((By.ID, "usernameField"))
         )
 
+        print("Entering credentials...")
+
         driver.find_element(By.ID, "usernameField").send_keys(email)
 
         driver.find_element(By.ID, "passwordField").send_keys(password)
 
-        driver.find_element(
+        login_btn = driver.find_element(
             By.XPATH,
             "//button[contains(text(),'Login')]"
-        ).click()
+        )
+
+        login_btn.click()
 
         print("Waiting after login...")
 
         time.sleep(10)
+
+        print("Opening profile page...")
 
         driver.get("https://www.naukri.com/mnjuser/profile")
 
@@ -60,6 +74,7 @@ def run_refresh():
         print("Refreshing profile...")
 
         js = """
+
         let btns = document.querySelectorAll('span.edit');
 
         if(btns.length > 0){
@@ -98,15 +113,17 @@ def run_refresh():
 
         result = driver.execute_script(js)
 
-        print(result)
+        print("RESULT:", result)
+
+        time.sleep(8)
 
         driver.save_screenshot("success.png")
 
-        time.sleep(5)
+        print("Profile refresh completed.")
 
     except Exception as e:
 
-        print("ERROR:", e)
+        print("ERROR:", str(e))
 
         driver.save_screenshot("debug_error.png")
 
