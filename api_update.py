@@ -6,7 +6,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 
-def run_easiest_refresh():
+def run_campus_refresh_final():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -20,35 +20,57 @@ def run_easiest_refresh():
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(5)
 
-        # Simple JS Login
+        # Login Injection
         driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
         driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
         driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[text()='Login']"))
         
-        print("Login Success! Resume re-upload kar raha hoon...")
-        time.sleep(10)
-
-        # Seedha Profile page par jahan resume upload ka option hota hai
+        print("Login done. Waiting for profile load...")
+        time.sleep(12)
         driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(10)
 
-        # Sabse important step: Resume file path dhoondna aur upload karna
-        # Naukri par 'attachCV' id wali input field hamesha hidden hoti hai par kaam karti hai
-        resume_path = os.path.join(os.getcwd(), "Resume.pdf")
+        # JavaScript execution for Profile Summary Refresh
+        # Yeh script tere 'Profile Summary' section ko target karegi
+        refresh_logic = """
+        let editBtn = document.querySelector('.profile-summary .edit') || document.querySelector('span.edit.icon') || document.querySelector('.icon-edit');
+        if (editBtn) {
+            editBtn.click();
+            setTimeout(() => {
+                let textarea = document.querySelector('textarea[name="summary"]') || document.querySelector('textarea');
+                if (textarea) {
+                    let val = textarea.value;
+                    textarea.value = val.endsWith('.') ? val.slice(0, -1) : val + '.';
+                    document.querySelector('button[type="submit"]').click();
+                }
+            }, 3000);
+            return "SUCCESS";
+        }
+        return "NOT_FOUND";
+        """
         
-        if os.path.exists(resume_path):
-            attach_field = driver.find_element(By.ID, "attachCV")
-            attach_field.send_keys(resume_path)
-            print("🏁 MISSION ACCOMPLISHED: Resume re-uploaded! Profile is now fresh.")
-            time.sleep(10) # Upload complete hone ka wait
+        result = driver.execute_script(refresh_logic)
+        if result == "SUCCESS":
+            print("🏁 MISSION ACCOMPLISHED: Profile fresh ho gayi!")
+            time.sleep(5)
         else:
-            print("❌ Error: 'Resume.pdf' file nahi mili repo mein!")
+            print("❌ Summary edit button nahi mila. Fallback to Resume upload...")
+            # Fallback to resume upload if summary fails
+            try:
+                resume_path = os.path.join(os.getcwd(), "Resume.pdf")
+                attach = driver.find_element(By.XPATH, "//input[@type='file']")
+                attach.send_keys(resume_path)
+                print("🏁 MISSION ACCOMPLISHED: Resume re-uploaded as fallback!")
+                time.sleep(5)
+            except:
+                print("❌ Dono methods fail ho gaye.")
+                driver.save_screenshot("debug_error.png")
 
     except Exception as e:
-        print(f"❌ Kuch gadbad hui: {str(e)}")
+        print(f"❌ Error: {str(e)}")
         driver.save_screenshot("debug_error.png")
     finally:
         driver.quit()
 
 if __name__ == "__main__":
-    run_easiest_refresh()
+    run_campus_refresh_final()
