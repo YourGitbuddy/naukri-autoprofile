@@ -5,6 +5,9 @@ on:
     - cron: '45 3 * * *'
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
@@ -21,7 +24,7 @@ jobs:
         run: |
           pip install selenium webdriver-manager requests
 
-      - name: Run Hybrid Refresh Script
+      - name: Run Hardened Refresh Script
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
