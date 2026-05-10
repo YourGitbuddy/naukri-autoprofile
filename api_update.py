@@ -9,9 +9,18 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+def save_cookies(driver, path):
+    with open(path, "wb") as file:
+        pickle.dump(driver.get_cookies(), file)
+
+def load_cookies(driver, path):
+    if os.path.exists(path):
+        with open(path, "rb") as file:
+            cookies = pickle.load(file)
+        for cookie in cookies:
+            driver.add_cookie(cookie)
 
 def run_refresh():
-
     options = Options()
 
     # REQUIRED FOR GITHUB ACTIONS
@@ -45,78 +54,75 @@ def run_refresh():
     )
 
     print("Launching Chrome...")
-
     driver = webdriver.Chrome(options=options)
-
     driver.set_page_load_timeout(60)
-
     wait = WebDriverWait(driver, 30)
 
-    print("Chrome Started Successfully")
+    cookies_path = "cookies.pkl"
 
     try:
-
         email = os.getenv("NAUKRI_EMAIL")
         password = os.getenv("NAUKRI_PASS")
 
         if not email or not password:
             raise Exception("GitHub secrets missing!")
 
-        print("Opening login page...")
-
+        # Check if cookies exist to load session
         driver.get("https://www.naukri.com/nlogin/login")
+        if os.path.exists(cookies_path):
+            load_cookies(driver, cookies_path)
+            driver.refresh()
+            time.sleep(5)
 
+        # Verify login by checking for a logged-in element
+        driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(5)
+        page_source = driver.page_source
 
-        driver.save_screenshot("opened.png")
+        # Check if logged in by presence of profile-specific element
+        logged_in = False
+        try:
+            wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
+            logged_in = False
+        except:
+            # If username field not found, assume logged in
+            logged_in = True
 
-        wait.until(
-            EC.presence_of_element_located(
-                (By.ID, "usernameField")
-            )
-        )
+        if not logged_in:
+            print("Not logged in, performing login...")
 
-        print("Entering credentials...")
+            driver.get("https://www.naukri.com/nlogin/login")
+            time.sleep(3)
 
-        driver.find_element(
-            By.ID,
-            "usernameField"
-        ).send_keys(email)
+            driver.find_element(By.ID, "usernameField").send_keys(email)
+            driver.find_element(By.ID, "passwordField").send_keys(password)
+            driver.find_element(By.XPATH, "//button[contains(text(),'Login')]").click()
 
-        driver.find_element(
-            By.ID,
-            "passwordField"
-        ).send_keys(password)
+            print("Waiting after login...")
+            time.sleep(15)
 
-        driver.find_element(
-            By.XPATH,
-            "//button[contains(text(),'Login')]"
-        ).click()
+            # Save cookies after login
+            save_cookies(driver, cookies_path)
 
-        print("Waiting after login...")
+            # Verify login success
+            driver.get("https://www.naukri.com/mnjuser/profile")
+            time.sleep(5)
+            # Check again for a logged-in element
+            try:
+                wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
+                print("Login failed, still on login page.")
+            except:
+                print("Login successful.")
 
-        time.sleep(15)
+        else:
+            print("Session cookies loaded, already logged in.")
 
-        driver.save_screenshot("after_login.png")
-
-        print("Opening profile page...")
-
-        driver.get(
-            "https://www.naukri.com/mnjuser/profile"
-        )
-
+        # Navigate to profile page
+        driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(10)
 
-        print("Current URL:", driver.current_url)
-
-        print("Page Title:", driver.title)
-
-        with open(
-            "page_source.html",
-            "w",
-            encoding="utf-8"
-        ) as f:
-
+        # Save page source for debugging
+        with open("page_source.html", "w", encoding="utf-8") as f:
             f.write(driver.page_source)
 
         driver.save_screenshot("profile_page.png")
@@ -124,103 +130,59 @@ def run_refresh():
         print("Trying profile refresh...")
 
         js_script = """
-
         function tryEdit(){
-
-            let allButtons =
-                document.querySelectorAll('*');
-
+            let allButtons = document.querySelectorAll('*');
             for(let btn of allButtons){
-
-                let text =
-                    btn.innerText || "";
-
-                let cls =
-                    btn.className || "";
-
+                let text = btn.innerText || "";
+                let cls = btn.className || "";
                 if(
                     text.toLowerCase().includes('edit') ||
                     cls.toLowerCase().includes('edit')
                 ){
-
                     try{
                         btn.click();
                         return true;
                     }catch(e){}
                 }
             }
-
             return false;
         }
 
         let clicked = tryEdit();
 
         if(clicked){
-
             setTimeout(() => {
-
-                let textarea =
-                    document.querySelector('textarea');
-
+                let textarea = document.querySelector('textarea');
                 if(textarea){
-
-                    textarea.value =
-                        textarea.value + " ";
-
-                    textarea.dispatchEvent(
-                        new Event(
-                            'input',
-                            { bubbles: true }
-                        )
-                    );
-
-                    let buttons =
-                        document.querySelectorAll('button');
-
+                    textarea.value = textarea.value + " ";
+                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                    let buttons = document.querySelectorAll('button');
                     for(let btn of buttons){
-
-                        let txt =
-                            btn.innerText || "";
-
-                        if(
-                            txt.toLowerCase()
-                            .includes('save')
-                        ){
-
+                        let txt = btn.innerText || "";
+                        if(txt.toLowerCase().includes('save')){
                             btn.click();
                             break;
                         }
                     }
                 }
-
             }, 3000);
-
             return "SUCCESS";
         }
-
         return "FAILED";
         """
 
         result = driver.execute_script(js_script)
-
         print("RESULT:", result)
 
         time.sleep(10)
-
         driver.save_screenshot("success.png")
-
         print("Profile refresh completed.")
 
     except Exception as e:
-
         print("ERROR:", str(e))
-
         driver.save_screenshot("debug_error.png")
-
     finally:
-
         driver.quit()
-
 
 if __name__ == "__main__":
     run_refresh()
