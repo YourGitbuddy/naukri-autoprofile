@@ -1,33 +1,21 @@
 name: Naukri Auto Refresh
 on:
   schedule:
-    - cron: '0 4 * * *' # Har roz subah 9:30 AM IST (approx) par apne aap chalega
-  workflow_dispatch:   # Manual button se chalane ke liye
+    - cron: '0 4 * * *'
+  workflow_dispatch:
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
+      - uses: actions/checkout@v3
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
-      - name: Install Google Chrome
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-
-      - name: Install Dependencies
-        run: |
-          pip install selenium webdriver-manager
-
-      - name: Run Profile Update Script
+      - name: Install requests
+        run: pip install requests
+      - name: Run Script
         env:
-          NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
-          NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
+          NAUKRI_COOKIE: ${{ secrets.NAUKRI_COOKIE }}
         run: python update_script.py
-        
