@@ -36,6 +36,9 @@ jobs:
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          IMAP_HOST: ${{ secrets.IMAP_HOST }} # optional; default imap.gmail.com used in script if not provided
         run: |
           python api_update.py
 
@@ -49,9 +52,11 @@ jobs:
             after_login.html
             login_fill_error.png
             login_fill_error.html
+            otp_not_found.png
+            otp_error.png
             login_failed.png
+            login_failed.html
             profile_page.png
+            page_source.html
             success.png
             debug_error.png
-            page_source.html
-            cookies.pkl
