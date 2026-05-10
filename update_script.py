@@ -1,7 +1,6 @@
 import os
 import time
-import random
-from datetime import datetime
+import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -15,17 +14,14 @@ def run_naukri_update():
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     wait = WebDriverWait(driver, 45)
 
     try:
-        # 1. Login Process
-        print("Logging into Naukri...")
+        # 1. Login to get Session Cookies
+        print("Logging into Naukri to capture session...")
         driver.get("https://www.naukri.com/nlogin/login")
         
         wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
@@ -36,29 +32,42 @@ def run_naukri_update():
         driver.execute_script("arguments[0].click();", login_btn)
         time.sleep(15)
 
-        # 2. Go to Profile Page
-        print("Navigating to Profile Page for Resume Upload...")
-        driver.get("https://www.naukri.com/mnjuser/profile")
-        time.sleep(10)
+        # 2. Extract Session Cookies and Tokens
+        cookies = driver.get_cookies()
+        session = requests.Session()
+        for cookie in cookies:
+            session.cookies.set(cookie['name'], cookie['value'])
 
-        # 3. Resume Upload Logic
-        # Resume file ka absolute path nikalna (GitHub runner ke liye)
+        # System and App Headers (Naukri standard)
+        headers = {
+            'x-requested-with': 'XMLHttpRequest',
+            'appid': '135',
+            'systemid': '135',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+        }
+
+        # 3. Upload Resume via API
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
-        
         if os.path.exists(resume_path):
-            print(f"Resume mil gaya: {resume_path}. Uploading...")
+            print(f"Resume uploading via API: {resume_path}")
             
-            # Naukri par hidden input field dhoondna jo file accept karti hai
-            upload_input = driver.find_element(By.XPATH, "//input[@type='file']")
-            upload_input.send_keys(resume_path)
+            with open(resume_path, 'rb') as f:
+                files = {
+                    'resume': ('Resume.pdf', f, 'application/pdf')
+                }
+                # Naukri's official upload endpoint
+                response = session.post(
+                    'https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/resume',
+                    headers=headers,
+                    files=files
+                )
             
-            print("Resume upload request bhej di gayi hai.")
-            time.sleep(15) # Upload hone ka wait
-            
-            # Check success message if any (optional)
-            print("Kaam ho gaya! Resume update ho chuka hai.")
+            if response.status_code in [200, 201]:
+                print("✅ Success! Resume uploaded and profile refreshed.")
+            else:
+                print(f"❌ Upload failed. Status: {response.status_code}, Response: {response.text}")
         else:
-            print("Error: 'Resume.pdf' file repo mein nahi mili! Please check naming.")
+            print("❌ Error: 'Resume.pdf' not found in repository.")
 
     except Exception as e:
         print(f"Error: {str(e)}")
