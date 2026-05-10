@@ -1,0 +1,15 @@
+name: Naukri Auto Update
+on:
+  schedule:
+    - cron: '0 */4 * * *' # Har 4 ghante mein chalega
+  workflow_dispatch:
+
+jobs:
+  run-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Script
+        env:
+          NAUKRI_COOKIE: ${{ secrets.NAUKRI_COOKIE }}
+        run: python update.py
