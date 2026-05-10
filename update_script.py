@@ -1,79 +1,71 @@
 import os
 import cloudscraper
-import random
 import json
 
 def run_naukri_update():
     # Android App Simulator
     scraper = cloudscraper.create_scraper(
-        browser={
-            'browser': 'chrome',
-            'platform': 'android',
-            'desktop': False
-        }
+        browser={'browser': 'chrome', 'platform': 'android', 'desktop': False}
     )
     
     username = os.environ['NAUKRI_EMAIL']
     password = os.environ['NAUKRI_PASS']
     
-    # Ye headers Naukri ki latest Android App (v14.x) ke hain
+    # Headers - Content-Type yahan nahi likhenge kyunki file upload hai
     headers = {
         "User-Agent": "Naukri/14.2 (Android 13; Pixel 7 Pro)",
         "Systemid": "109",
         "Appid": "109",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "X-Requested-With": "com.naukri.naukriapp",
-        "Host": "www.naukri.com",
-        "Connection": "Keep-Alive"
+        "X-Requested-With": "com.naukri.naukriapp"
     }
 
     try:
-        print("Bhai, Mission 'Final Refresh' start...")
+        print("Bhai, Resume Upload Mission shuru...")
         
-        # Step 1: Login via direct Auth API
-        login_payload = {"username": username, "password": password, "client_id": "naukri_app"}
-        login_res = scraper.post("https://www.naukri.com/nlogin/login", json=login_payload, headers=headers)
+        # Step 1: Login
+        login_res = scraper.post("https://www.naukri.com/nlogin/login", 
+                                 json={"username": username, "password": password, "client_id": "naukri_app"}, 
+                                 headers=headers)
         
         if login_res.status_code != 200:
-            print(f"❌ Login Blocked: {login_res.status_code}")
+            print(f"❌ Login Fail: {login_res.status_code}")
             return
         
-        print("✅ App Login Success!")
+        print("✅ Login Success! Session active hai.")
 
-        # Step 2: Extract Auth Cookies strictly
-        cookies = scraper.cookies.get_dict()
-
-        # Step 3: Fast Profile Sync (No PUT, only POST)
-        # Hum is baar resume-headline nahi, 'profile-summary' update karenge 
-        # Kyunki iska POST endpoint hamesha open rehta hai refresh ke liye
-        refresh_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary"
+        # Step 2: Resume Upload Path
+        resume_path = os.path.join(os.getcwd(), "Resume.pdf")
         
-        toggle = " " if random.randint(0, 1) == 0 else ""
-        summary_payload = {
-            "summary": f"Azure Infrastructure and Data Engineer | Synapse | Bicep | AKS | Technical Specialist{toggle}"
-        }
-
-        print(f"Refreshing profile with subtle space toggle...")
-        
-        # POST is more stable than PUT on Akamai
-        res = scraper.post(refresh_url, data=json.dumps(summary_payload), headers=headers)
-        
-        if res.status_code in [200, 201, 204]:
-            print("🏁 Mission Accomplished! Status: Updated Today.")
-        elif res.status_code == 405 or res.status_code == 501:
-            print("POST not allowed, trying PUT with strict SSL...")
-            res_put = scraper.put(refresh_url, data=json.dumps(summary_payload), headers=headers)
-            if res_put.status_code in [200, 201, 204]:
-                print("🏁 Mission Accomplished via PUT!")
-            else:
-                print(f"❌ Fail: {res_put.status_code}")
+        if os.path.exists(resume_path):
+            # Naukri ke do sabse stable endpoints
+            urls = [
+                "https://www.naukri.com/v1/jobseeker/profile/resume",
+                "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v1/users/self/resume"
+            ]
+            
+            success = False
+            for url in urls:
+                print(f"Trying upload on: {url}")
+                with open(resume_path, 'rb') as f:
+                    files = {'resume': ('Resume.pdf', f, 'application/pdf')}
+                    # Note: Yahan headers mein 'Content-Type' nahi bhejenge
+                    res = scraper.post(url, headers=headers, files=files)
+                
+                if res.status_code in [200, 201, 204]:
+                    print(f"🏁 Mission Accomplished! Resume uploaded via {url.split('/')[-1]}")
+                    success = True
+                    break
+                else:
+                    print(f"❌ Failed on this URL (Status: {res.status_code})")
+            
+            if not success:
+                print("❌ Dono endpoints fail ho gaye. Response Check karo.")
+                print(f"Last Response: {res.text[:150]}")
         else:
-            print(f"❌ Final Fail Status: {res.status_code}")
-            print(f"Response: {res.text[:150]}")
+            print("❌ Error: Resume.pdf nahi mili root folder mein!")
 
     except Exception as e:
-        print(f"❌ Error aayi: {str(e)}")
+        print(f"❌ Critical Error: {str(e)}")
 
 if __name__ == "__main__":
     run_naukri_update()
