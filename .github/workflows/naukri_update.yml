@@ -18,10 +18,9 @@ jobs:
           python-version: '3.10'
 
       - name: Install Dependencies
-        run: |
-          pip install selenium webdriver-manager
+        run: pip install selenium webdriver-manager
 
-      - name: Run UI Refresh Script
+      - name: Run Universal Refresh
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
