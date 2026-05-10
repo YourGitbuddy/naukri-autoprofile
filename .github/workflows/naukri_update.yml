@@ -1,4 +1,4 @@
-name: Naukri Profile Refresh (Action Version)
+name: Naukri Resume Update (Direct API)
 
 on:
   schedule:
@@ -6,17 +6,65 @@ on:
   workflow_dispatch:
 
 jobs:
-  refresh_profile:
+  update-resume:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Update Naukri Resume
-        uses: sst-vatsal/naukri-resume-action@v1.0.1
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          # Ye secrets tumhare repo mein hone chahiye
-          username: ${{ secrets.NAUKRI_EMAIL }}
-          password: ${{ secrets.NAUKRI_PASS }}
-          # Agar tumhare file ka naam 'Resume.pdf' hai to ye line sahi hai
-          resume_path: 'Resume.pdf'
+          python-version: '3.10'
+
+      - name: Install Cloudscraper
+        run: pip install cloudscraper
+
+      - name: Update via API Script
+        env:
+          NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
+          NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
+        run: |
+          cat << 'EOF' > api_update.py
+          import os
+          import cloudscraper
+          
+          def run():
+              scraper = cloudscraper.create_scraper()
+              headers = {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                  "Appid": "109",
+                  "Systemid": "109"
+              }
+              
+              # 1. Login
+              print("Logging in...")
+              auth_url = "https://www.naukri.com/nlogin/login"
+              payload = {"username": os.environ['NAUKRI_EMAIL'], "password": os.environ['NAUKRI_PASS'], "client_id": "naukri_app"}
+              res = scraper.post(auth_url, json=payload, headers=headers)
+              
+              if res.status_code != 200:
+                  print(f"Login failed: {res.status_code}")
+                  return
+
+              # 2. Upload Resume
+              print("Uploading Resume...")
+              upload_url = "https://www.naukri.com/v1/jobseeker/profile/resume"
+              if os.path.exists("Resume.pdf"):
+                  with open("Resume.pdf", "rb") as f:
+                      files = {'resume': ('Resume.pdf', f, 'application/pdf')}
+                      # Content-Type header mat dena, requests khud handle karega
+                      res_up = scraper.post(upload_url, headers=headers, files=files)
+                      
+                  if res_up.status_code in [200, 201, 204]:
+                      print("🏁 Mission Accomplished! Profile is now Fresh.")
+                  else:
+                      print(f"Upload failed: {res_up.status_code}")
+                      print(f"Server Response: {res_up.text[:200]}")
+              else:
+                  print("Error: Resume.pdf not found in repo!")
+
+          if __name__ == "__main__":
+              run()
+          EOF
+          python api_update.py
