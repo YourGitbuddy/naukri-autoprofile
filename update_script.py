@@ -1,80 +1,77 @@
 import os
-import cloudscraper
-import json
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 def run_naukri_update():
-    # Browser ko Desktop Chrome mimic karne ke liye set kiya hai
-    scraper = cloudscraper.create_scraper(
-        browser={
-            'browser': 'chrome',
-            'platform': 'windows',
-            'desktop': True
-        }
-    )
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
     
-    username = os.environ['NAUKRI_EMAIL']
-    password = os.environ['NAUKRI_PASS']
+    # Anti-detection flags
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     
-    # Desktop Headers
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-        "Origin": "https://www.naukri.com",
-        "Referer": "https://www.naukri.com/mnjuser/profile",
-        "X-Requested-With": "XMLHttpRequest",
-        "Appid": "135",
-        "Systemid": "135"
-    }
+    # Bypassing navigator.webdriver detection
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+    })
+
+    wait = WebDriverWait(driver, 30)
 
     try:
-        print("Starting Login...")
+        print("Starting Stealth Browser Login...")
+        driver.get("https://www.naukri.com/nlogin/login")
         
-        # Step 1: Login
-        login_res = scraper.post("https://www.naukri.com/nlogin/login", 
-                                 json={"username": username, "password": password}, 
-                                 headers=headers)
+        # Login Process
+        email_input = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
+        email_input.send_keys(os.environ['NAUKRI_EMAIL'])
         
-        if login_res.status_code != 200:
-            print(f"Login failed: {login_res.status_code}")
-            return
+        pass_input = driver.find_element(By.ID, "passwordField")
+        pass_input.send_keys(os.environ['NAUKRI_PASS'])
         
-        print("Login Successful!")
+        login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
+        driver.execute_script("arguments[0].click();", login_btn)
+        
+        print("Login done, waiting for session...")
+        time.sleep(10)
 
-        # Step 2: Resume Upload via Legacy V0 Endpoint
-        # Ye endpoint 404 hone ke chances bohot kam hain
+        # Direct Jump to Profile
+        driver.get("https://www.naukri.com/mnjuser/profile")
+        time.sleep(5)
+
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
         if os.path.exists(resume_path):
-            # Naukri Legacy Resume Upload URL
-            upload_url = "https://www.naukri.com/v0/jobseeker/profile/resume"
+            print(f"Uploading Resume from: {resume_path}")
             
-            print("Attempting Legacy Upload...")
-            with open(resume_path, 'rb') as f:
-                # 'resume' key important hai
-                files = {'resume': ('Resume.pdf', f, 'application/pdf')}
-                
-                # We do NOT set Content-Type header here
-                res = scraper.post(upload_url, headers=headers, files=files)
+            # Hidden File Input dhoondna
+            # Naukri mobile/desktop dono mein ek hidden input rakhta hai
+            attach_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='file']")))
+            attach_input.send_keys(resume_path)
             
-            if res.status_code in [200, 201, 204]:
-                print("SUCCESS: Profile refreshed via Legacy API!")
-            else:
-                print(f"Legacy failed ({res.status_code}). Trying Profile Refresh instead...")
-                
-                # PLAN B: Agar upload block hai, toh Headline update karke date refresh karte hain
-                headline_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/resume-headline"
-                headline_data = {"resumeHeadline": "Azure Infrastructure and Data Engineer | Synapse | Bicep | AKS."}
-                
-                res_h = scraper.put(headline_url, json=headline_data, headers=headers)
-                if res_h.status_code in [200, 201, 204]:
-                    print("SUCCESS: Profile updated via Headline Refresh!")
-                else:
-                    print(f"All methods failed. Final Status: {res_h.status_code}")
-
+            print("Wait for upload to sync...")
+            time.sleep(15) 
+            
+            # Check for success toast or just exit
+            print("SUCCESS: Profile should be refreshed now!")
         else:
             print("Error: Resume.pdf not found!")
 
     except Exception as e:
-        print(f"An error occurred: {str(e)}")
+        print(f"Failed: {str(e)}")
+        driver.save_screenshot("debug_error.png")
+    finally:
+        driver.quit()
 
 if __name__ == "__main__":
     run_naukri_update()
