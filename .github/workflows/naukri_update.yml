@@ -2,17 +2,14 @@ name: Naukri Auto Refresh
 
 on:
   schedule:
-    - cron: '45 3 * * *'
-
-  workflow_dispatch:
+    - cron: '45 3 * * *'  # Runs daily at 03:45 UTC
+  workflow_dispatch:     # Allows manual trigger
 
 jobs:
   refresh-profile:
-
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -38,18 +35,14 @@ jobs:
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
-
         run: |
           python api_update.py
 
       - name: Upload Files
         if: always()
-
         uses: actions/upload-artifact@v4
-
         with:
           name: screenshots
-
           path: |
             opened.png
             after_login.png
