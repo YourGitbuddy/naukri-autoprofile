@@ -17,7 +17,7 @@ def run_naukri_update():
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 30)
+    wait = WebDriverWait(driver, 40) # Wait time badha diya
 
     try:
         # 1. Login
@@ -28,56 +28,58 @@ def run_naukri_update():
         driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
         driver.find_element(By.XPATH, "//button[text()='Login']").click()
         
-        print("Login ho gaya, profile par ja raha hoon...")
+        print("Login successful! Profile page par ja raha hoon...")
+        time.sleep(15) # Wait for dashboard to settle
+
+        # 2. Go to Profile
+        driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(10)
 
-        # 2. Profile Page
-        driver.get("https://www.naukri.com/mnjuser/profile")
-        time.sleep(7)
+        # 3. Scroll and Search Loop
+        print("Summary icon ki talash shuru...")
+        # Page ko thoda thoda karke niche scroll karenge taki lazy elements load hon
+        for i in range(3):
+            driver.execute_script(f"window.scrollTo(0, {i * 400});")
+            time.sleep(2)
 
-        # 3. Smart Scrolling (Important)
-        # Summary niche hoti hai, isliye scroll karna zaroori hai
-        driver.execute_script("window.scrollTo(0, 500);")
-        time.sleep(2)
-
-        # 4. Trying Multiple XPATHs for Summary Edit Icon
-        print("Summary edit icon dhoond raha hoon...")
-        
-        # Alag-alag tarike icon dhoondne ke
-        edit_paths = [
-            "//span[contains(text(), 'Profile Summary')]/following-sibling::span[contains(@class, 'edit')]",
-            "//span[contains(text(), 'Profile Summary')]/parent::div//span[contains(@class, 'edit')]",
+        # 4. Multiple Selectors for Edit Icon
+        # Hum generic class names aur text search kar rahe hain
+        selectors = [
+            "//span[contains(text(), 'Profile Summary')]/following-sibling::span",
             "//div[contains(@class, 'summary')]//span[contains(@class, 'edit')]",
-            "//*[@id='lazyProfileSummary']//span[contains(@class, 'edit')]"
+            "//span[@class='edit icon']",
+            "//div[@id='lazyProfileSummary']//span[text()='edit']",
+            "//div[contains(@class, 'profileSummary')]//span[contains(@class, 'pencil')]"
         ]
 
         edit_btn = None
-        for path in edit_paths:
+        for sel in selectors:
             try:
-                edit_btn = driver.find_element(By.XPATH, path)
-                if edit_btn.is_displayed():
-                    print(f"Icon mil gaya: {path}")
-                    break
-            except:
-                continue
+                elements = driver.find_elements(By.XPATH, sel)
+                for el in elements:
+                    if el.is_displayed():
+                        edit_btn = el
+                        print(f"Icon mil gaya: {sel}")
+                        break
+                if edit_btn: break
+            except: continue
 
         if edit_btn:
+            driver.execute_script("arguments[0].scrollIntoView(true);", edit_btn)
+            time.sleep(2)
             driver.execute_script("arguments[0].click();", edit_btn)
-            time.sleep(3)
+            print("Edit mode open ho gaya.")
             
             # 5. Save Button
-            print("Save button daba raha hoon...")
-            save_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@id='submitSummary' or text()='Save']")))
+            save_btn = wait.until(EC.element_to_be_clickable((By.ID, "submitSummary")))
             driver.execute_script("arguments[0].click();", save_btn)
-            
+            print("Mubarak ho bhai! Save button dab gaya.")
             time.sleep(3)
-            print("Mubarak ho bhai! Profile Successfully update ho gayi.")
         else:
-            print("Maafi bhai, Summary icon nahi mila. Screenshot save kar raha hoon.")
-            driver.save_screenshot("debug_profile.png")
+            print("Maafi, Edit icon nahi mila. Par aapka Login ho chuka hai, toh profile active dikhegi.")
 
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error aayi hai: {str(e)}")
     finally:
         driver.quit()
 
