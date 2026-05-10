@@ -1,5 +1,6 @@
 import os
 import time
+import random
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -10,59 +11,75 @@ from selenium.webdriver.support import expected_conditions as EC
 
 def run_naukri_update():
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless=new") # Naya headless mode jo kam detect hota hai
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1920,1080")
+    
+    # Advanced Masking: Real browser dikhne ke liye
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 40)
+    
+    # Automation flag hide karne ke liye
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": """
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            })
+        """
+    })
+
+    wait = WebDriverWait(driver, 45)
 
     try:
-        # 1. Login
+        # Step 1: Pehle Google par jao (Referrer bypass)
+        print("Bypass start: Google par ja raha hoon...")
+        driver.get("https://www.google.com")
+        time.sleep(random.randint(2, 5))
+
+        # Step 2: Login Page
         print("Naukri login shuru...")
         driver.get("https://www.naukri.com/nlogin/login")
+        time.sleep(random.randint(5, 8))
         
-        wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
-        driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
+        # Check if blocked
+        if "Access Denied" in driver.title or "www.naukri.com" == driver.title:
+            print("Abhi bhi block hai. Screenshot save kar raha hoon.")
+            driver.save_screenshot("blocked.png")
+            # Ek baar mobile login page try karte hain (kam secure hota hai)
+            driver.get("https://www.naukri.com/mnjuser/profile")
+        
+        # Login fields fill karna
+        user_input = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
+        user_input.send_keys(os.environ['NAUKRI_EMAIL'])
+        
+        pass_input = driver.find_element(By.ID, "passwordField")
+        pass_input.send_keys(os.environ['NAUKRI_PASS'])
+        
         driver.find_element(By.XPATH, "//button[text()='Login']").click()
-        
-        print("Login done. Profile page par ja raha hoon...")
+        print("Login button dabaya gaya...")
         time.sleep(10)
 
-        # 2. Profile Page
-        driver.get("https://www.naukri.com/mnjuser/profile")
-        time.sleep(10)
-
-        # 3. Resume Headline Edit (Ye page ke top par hota hai)
-        print("Resume Headline edit karne ki koshish...")
+        # Step 3: Seedha Profile Summary Update API hit karna (Browser ke andar se)
+        # Kyunki login ho chuka hai, hum JS se direct profile hit kar sakte hain
+        print("Direct JavaScript refresh try kar raha hoon...")
+        driver.execute_script("""
+            fetch('https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'appid': '135', 'systemid': '135' },
+                body: json.stringify({ "summary": "Azure Infrastructure Engineer | Synapse | Bicep | AKS" })
+            }).then(res => console.log('Update Status:', res.status));
+        """)
         
-        # 'Resume Headline' ke pass wale 'edit' icon ko dhoondna
-        # Iska XPATH zyada stable hai kyunki ye page ke shuruat mein hota hai
-        try:
-            edit_headline = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[text()='Resume headline']/following-sibling::span[contains(@class, 'edit')]")))
-            driver.execute_script("arguments[0].click();", edit_headline)
-            print("Headline edit box khul gaya.")
-            time.sleep(3)
-
-            # Save button dabana
-            save_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[text()='Save' and @type='submit']")))
-            driver.execute_script("arguments[0].click();", save_btn)
-            print("Success! Profile status refresh ho gaya.")
-        
-        except Exception as e:
-            print("Headline button nahi mila, last attempt with generic class...")
-            # Agar upar wala fail ho toh page ke pehle 'edit' icon ko click karo
-            driver.execute_script("document.querySelector('.icon.edit').click();")
-            time.sleep(2)
-            driver.execute_script("document.querySelector('button[type=\"submit\"]').click();")
-            print("Generic click performed.")
+        print("Kaam ho gaya! Refresh command bhej di gayi hai.")
+        time.sleep(5)
 
     except Exception as e:
         print(f"Error: {str(e)}")
-        # Debugging ke liye page ka HTML save kar raha hoon (log mein dikhega)
-        print("Page Content Snippet:", driver.page_source[:500])
     finally:
         driver.quit()
 
