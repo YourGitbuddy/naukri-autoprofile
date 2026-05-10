@@ -14,14 +14,28 @@ def run_refresh():
 
     options = Options()
 
-    # HEADLESS OFF
-    # options.add_argument("--headless=new")
+    # REQUIRED FOR GITHUB ACTIONS
+    options.add_argument("--headless=new")
 
+    # Stability
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
+    options.add_argument("--remote-debugging-port=9222")
 
+    # Anti Detection
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-infobars")
+
+    # SSL / Network
+    options.add_argument("--ignore-certificate-errors")
+    options.add_argument("--allow-running-insecure-content")
+    options.add_argument("--dns-prefetch-disable")
+    options.add_argument("--disable-web-security")
+
+    # User Agent
     options.add_argument(
         "user-agent=Mozilla/5.0 "
         "(Windows NT 10.0; Win64; x64) "
@@ -34,90 +48,56 @@ def run_refresh():
 
     driver = webdriver.Chrome(options=options)
 
+    driver.set_page_load_timeout(60)
+
     wait = WebDriverWait(driver, 30)
+
+    print("Chrome Started Successfully")
 
     try:
 
-        print("Opening Naukri Homepage...")
+        email = os.getenv("NAUKRI_EMAIL")
+        password = os.getenv("NAUKRI_PASS")
 
-        driver.get("https://www.naukri.com")
+        if not email or not password:
+            raise Exception("GitHub secrets missing!")
+
+        print("Opening login page...")
+
+        driver.get("https://www.naukri.com/nlogin/login")
 
         time.sleep(5)
 
-        # COOKIE LOGIN
-        if os.path.exists("cookies.pkl"):
+        driver.save_screenshot("opened.png")
 
-            print("Using saved cookies...")
-
-            cookies = pickle.load(
-                open("cookies.pkl", "rb")
+        wait.until(
+            EC.presence_of_element_located(
+                (By.ID, "usernameField")
             )
+        )
 
-            for cookie in cookies:
+        print("Entering credentials...")
 
-                try:
-                    driver.add_cookie(cookie)
-                except:
-                    pass
+        driver.find_element(
+            By.ID,
+            "usernameField"
+        ).send_keys(email)
 
-            driver.get(
-                "https://www.naukri.com/mnjuser/profile"
-            )
+        driver.find_element(
+            By.ID,
+            "passwordField"
+        ).send_keys(password)
 
-            time.sleep(10)
+        driver.find_element(
+            By.XPATH,
+            "//button[contains(text(),'Login')]"
+        ).click()
 
-        else:
+        print("Waiting after login...")
 
-            print("Manual login required...")
+        time.sleep(15)
 
-            email = os.getenv("NAUKRI_EMAIL")
-            password = os.getenv("NAUKRI_PASS")
-
-            driver.get(
-                "https://www.naukri.com/nlogin/login"
-            )
-
-            time.sleep(5)
-
-            driver.save_screenshot("opened.png")
-
-            wait.until(
-                EC.presence_of_element_located(
-                    (By.ID, "usernameField")
-                )
-            )
-
-            driver.find_element(
-                By.ID,
-                "usernameField"
-            ).send_keys(email)
-
-            driver.find_element(
-                By.ID,
-                "passwordField"
-            ).send_keys(password)
-
-            driver.find_element(
-                By.XPATH,
-                "//button[contains(text(),'Login')]"
-            ).click()
-
-            print(
-                "Complete OTP manually if asked..."
-            )
-
-            # WAIT FOR MANUAL OTP
-            time.sleep(60)
-
-            driver.save_screenshot("after_login.png")
-
-            # SAVE COOKIES
-            pickle.dump(
-                driver.get_cookies(),
-                open("cookies.pkl", "wb")
-            )
-
-            print("Cookies saved successfully!")
+        driver.save_screenshot("after_login.png")
 
         print("Opening profile page...")
 
