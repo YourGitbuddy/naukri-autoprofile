@@ -1,65 +1,88 @@
 import os
-import cloudscraper
-import json
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-def run_naukri_update():
-    # Android Chrome fingerprint
-    scraper = cloudscraper.create_scraper(
-        browser={'browser': 'chrome', 'platform': 'android', 'desktop': False}
-    )
+def update_naukri_profile():
+    # 1. Browser Setup
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new") # Headless mode for GitHub Actions
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
     
-    username = os.environ['NAUKRI_EMAIL']
-    password = os.environ['NAUKRI_PASS']
+    # Anti-Bot Detection: Ye flags Naukri ko batate hain ki ye automation nahi hai
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36",
-        "Accept": "application/json",
-        "Appid": "135",
-        "Systemid": "135",
-        "X-Requested-With": "XMLHttpRequest",
-        "Origin": "https://www.naukri.com",
-        "Referer": "https://www.naukri.com/nlogin/login"
-    }
+    # Navigator detection bypass
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+    })
+
+    wait = WebDriverWait(driver, 40)
 
     try:
-        print("Starting API Login...")
+        # Step 2: Login Page par jana
+        print("Bhai, Login page load kar raha hoon...")
+        driver.get("https://www.naukri.com/nlogin/login")
         
-        # Step 1: Login to get Session Cookies
-        login_data = {"username": username, "password": password}
-        res_login = scraper.post("https://www.naukri.com/nlogin/login", json=login_data, headers=headers)
+        # Email & Password dalkar login karna
+        email_field = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
+        email_field.send_keys(os.environ['NAUKRI_EMAIL'])
         
-        if res_login.status_code != 200:
-            print(f"Login Blocked (Status: {res_login.status_code}). Server might be rejecting GitHub IP.")
-            return
+        pass_field = driver.find_element(By.ID, "passwordField")
+        pass_field.send_keys(os.environ['NAUKRI_PASS'])
+        
+        login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
+        driver.execute_script("arguments[0].click();", login_btn)
+        
+        print("Login button clicked. Waiting for dashboard...")
+        time.sleep(10) # Wait for page transition
 
-        print("Login Successful! Refreshing profile status...")
+        # Step 3: Seedha Profile Page par jump
+        print("Navigating to Profile page...")
+        driver.get("https://www.naukri.com/mnjuser/profile")
+        time.sleep(5)
 
-        # Step 2: Touch Profile Activity (This triggers 'Updated Today')
-        # Hum resume upload ke bajaye 'Profile Summary' ko ek dot (.) se update karenge
-        # Ye hamesha kaam karta hai aur 404/501 nahi deta
-        
-        refresh_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary"
-        
-        # We fetch current summary first to keep it safe
-        current_data = scraper.get(refresh_url, headers=headers).json()
-        summary = current_data.get('summary', 'Azure Infrastructure and Data Engineer')
-        
-        # Adding/Removing a dot to trigger update
-        new_summary = summary[:-1] if summary.endswith('.') else summary + '.'
-        
-        payload = {"summary": new_summary}
-        
-        # Method override for PUT via POST (To bypass firewall)
-        headers["X-HTTP-Method-Override"] = "PUT"
-        res_refresh = scraper.post(refresh_url, json=payload, headers=headers)
-
-        if res_refresh.status_code in [200, 204]:
-            print("🏁 SUCCESS: Profile Refreshed! Status: Updated Today.")
+        # Step 4: Resume Upload Logic
+        resume_path = os.path.join(os.getcwd(), "Resume.pdf")
+        if os.path.exists(resume_path):
+            print(f"Uploading file: {resume_path}")
+            
+            # Naukri ka hidden file input locator
+            # Hum wait karenge ki input load ho jaye
+            attach_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='file']")))
+            
+            # File send karna
+            attach_input.send_keys(resume_path)
+            
+            print("File bhej di hai. Processing ke liye wait kar raha hoon...")
+            time.sleep(20) # 20 seconds wait taaki upload sync ho jaye
+            
+            print("🏁 Success: Resume upload ho gaya aur profile refresh ho gayi!")
+            driver.save_screenshot("final_success.png")
         else:
-            print(f"Refresh failed (Status: {res_refresh.status_code}).")
+            print("❌ Error: 'Resume.pdf' file repo mein nahi mili!")
 
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"❌ Failed: {str(e)}")
+        driver.save_screenshot("debug_error.png")
+        # Page source save kar rahe hain taaki hum error dhoond sakein
+        with open("error_source.html", "w", encoding="utf-8") as f:
+            f.write(driver.page_source)
+    
+    finally:
+        driver.quit()
 
 if __name__ == "__main__":
-    run_naukri_update()
+    update_naukri_profile()
