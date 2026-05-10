@@ -13,7 +13,7 @@ def run_refresh():
 
     options = Options()
 
-    # Headless Config
+    # Headless
     options.add_argument("--headless=new")
 
     # Stability
@@ -115,21 +115,61 @@ def run_refresh():
 
         time.sleep(10)
 
+        print("Current URL:", driver.current_url)
+
+        print("Page Title:", driver.title)
+
+        with open(
+            "page_source.html",
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+            f.write(driver.page_source)
+
         driver.save_screenshot("profile_page.png")
 
         print("Trying profile refresh...")
 
         js_script = """
 
-        let editBtns = document.querySelectorAll('span.edit');
+        function clickEditButtons(){
 
-        if(editBtns.length > 0){
+            let selectors = [
 
-            editBtns[0].click();
+                '.edit.icon',
+                'span.edit',
+                '.widgetHead .edit',
+                '.resumeHeadline .edit',
+                '.profileSummary .edit',
+                '.icon.edit',
+                '[data-ga-track*="edit"]'
+
+            ];
+
+            for(let s of selectors){
+
+                let btn = document.querySelector(s);
+
+                if(btn){
+
+                    btn.click();
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        let clicked = clickEditButtons();
+
+        if(clicked){
 
             setTimeout(() => {
 
-                let textarea = document.querySelector('textarea');
+                let textarea =
+                    document.querySelector('textarea');
 
                 if(textarea){
 
@@ -143,17 +183,27 @@ def run_refresh():
                         )
                     );
 
-                    let saveBtn =
-                        document.querySelector(
-                            'button[type="submit"]'
-                        );
+                    let saveSelectors = [
 
-                    if(saveBtn){
+                        'button[type="submit"]',
+                        '.btn-dark-ot',
+                        '.saveBtn',
+                        'button.save'
 
-                        saveBtn.click();
+                    ];
 
+                    for(let s of saveSelectors){
+
+                        let btn =
+                            document.querySelector(s);
+
+                        if(btn){
+
+                            btn.click();
+
+                            break;
+                        }
                     }
-
                 }
 
             }, 3000);
@@ -168,7 +218,7 @@ def run_refresh():
 
         print("RESULT:", result)
 
-        # Fallback Resume Upload
+        # Resume Upload Fallback
         if result != "SUCCESS":
 
             print("Trying Resume Upload Fallback...")
@@ -180,14 +230,45 @@ def run_refresh():
                     "Resume.pdf"
                 )
 
-                upload_input = driver.find_element(
-                    By.XPATH,
-                    "//input[@type='file']"
-                )
+                print("Resume Path:", resume_path)
 
-                upload_input.send_keys(resume_path)
+                upload_selectors = [
 
-                print("Resume Uploaded Successfully!")
+                    "//input[@type='file']",
+                    "//input[contains(@accept,'pdf')]",
+                    "//input[contains(@class,'upload')]"
+
+                ]
+
+                uploaded = False
+
+                for selector in upload_selectors:
+
+                    try:
+
+                        upload_input = driver.find_element(
+                            By.XPATH,
+                            selector
+                        )
+
+                        upload_input.send_keys(resume_path)
+
+                        uploaded = True
+
+                        print(
+                            "Resume Uploaded Successfully!"
+                        )
+
+                        break
+
+                    except:
+                        pass
+
+                if not uploaded:
+
+                    print(
+                        "Resume upload element not found."
+                    )
 
             except Exception as upload_error:
 
