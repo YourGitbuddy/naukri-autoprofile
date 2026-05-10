@@ -24,12 +24,13 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install selenium==4.21.0
+          pip install selenium==4.21.0 webdriver-manager
 
-      - name: Verify Chrome
+      - name: Verify Chrome and Chromedriver
         run: |
-          google-chrome --version
-          which google-chrome
+          google-chrome --version || true
+          which google-chrome || true
+          chromedriver --version || true
 
       - name: Run Naukri Script
         env:
@@ -42,12 +43,15 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots
+          name: screenshots-and-pages
           path: |
-            opened.png
             after_login.png
+            after_login.html
+            login_fill_error.png
+            login_fill_error.html
+            login_failed.png
             profile_page.png
             success.png
             debug_error.png
-            cookies.pkl
             page_source.html
+            cookies.pkl
