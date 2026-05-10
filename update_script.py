@@ -1,74 +1,39 @@
-import os
-import cloudscraper
-import json
-
-def run_naukri_update():
-    # Mobile App Simulation
-    scraper = cloudscraper.create_scraper(
-        browser={'browser': 'chrome', 'platform': 'android', 'desktop': False}
-    )
-    
-    username = os.environ['NAUKRI_EMAIL']
-    password = os.environ['NAUKRI_PASS']
-    
-    # Ye headers legacy app ke hain jo server easily bypass hone dete hain
-    headers = {
-        "User-Agent": "Naukri/14.2 (Android 13; Pixel 7 Pro)",
-        "Systemid": "109",
-        "Appid": "109",
-        "X-Requested-With": "com.naukri.naukriapp"
-    }
-
-    try:
-        print("Bhai, Final Attempt: Resume Sync Mission shuru...")
-        
-        # Step 1: Login
-        login_res = scraper.post("https://www.naukri.com/nlogin/login", 
-                                 json={"username": username, "password": password, "client_id": "naukri_app"}, 
-                                 headers=headers)
-        
-        if login_res.status_code != 200:
-            print(f"❌ Login Fail: {login_res.status_code}")
-            return
-        
-        print("✅ Login Success!")
-
-        # Step 2: Resume Path
-        resume_path = os.path.join(os.getcwd(), "Resume.pdf")
-        
-        if os.path.exists(resume_path):
-            # Sabse stable endpoint jo 'Whitelabel Error' nahi deta
-            upload_url = "https://www.naukri.com/v2/jobseeker/profile/resume"
-            
-            print(f"Uploading Resume to Mobile-V2 endpoint...")
-            
-            with open(resume_path, 'rb') as f:
-                # 'files' parameter requests mein automatically sahi boundary banata hai
-                files = {
-                    'resume': ('Resume.pdf', f, 'application/pdf')
-                }
-                # Hum headers mein Content-Type nahi bhejenge taaki boundary mismatch na ho
-                res = scraper.post(upload_url, headers=headers, files=files)
-            
-            if res.status_code in [200, 201, 204]:
-                print("🏁 Mission Accomplished! Resume Fresh ho gaya.")
-            else:
-                print(f"❌ V2 Endpoint failed ({res.status_code}). Trying Legacy Upload...")
-                # Last resort legacy URL
-                legacy_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v1/users/self/resume"
-                with open(resume_path, 'rb') as f:
-                    res_legacy = scraper.post(legacy_url, headers=headers, files={'resume': ('Resume.pdf', f, 'application/pdf')})
-                
-                if res_legacy.status_code in [200, 201]:
-                    print("🏁 Mission Accomplished via Legacy Route!")
-                else:
-                    print(f"❌ Final Fail. Status: {res_legacy.status_code}")
-                    print(f"Server says: {res_legacy.text[:100]}")
-        else:
-            print("❌ Error: Resume.pdf missing!")
-
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
-
-if __name__ == "__main__":
-    run_naukri_update()
+Run python update_script.py
+  python update_script.py
+  shell: /usr/bin/bash -e {0}
+  env:
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    pythonLocation: /opt/hostedtoolcache/Python/3.10.20/x64
+    PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.10.20/x64/lib/pkgconfig
+    Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.20/x64
+    Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.20/x64
+    Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.10.20/x64
+    LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.10.20/x64/lib
+    NAUKRI_EMAIL: ***
+    NAUKRI_PASS: 
+  
+Bhai, Final Attempt: Resume Sync Mission shuru...
+✅ Login Success!
+Uploading Resume to Mobile-V2 endpoint...
+❌ V2 Endpoint failed (404). Trying Legacy Upload...
+❌ Final Fail. Status: 404
+Server says: <html><body><h1>Whitelabel Error Page</h1><p>This application has no configured error view, so you a
+0s
+Post job cleanup.
+(node:2327) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+1s
+Post job cleanup.
+/usr/bin/git version
+git version 2.53.0
+Temporarily overriding HOME='/home/runner/work/_temp/1f4c6f17-e071-4aeb-bb97-ba48e3e898b4' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+/usr/bin/git config --global --add safe.directory /home/runner/work/naukri-autoprofile/naukri-autoprofile
+/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+http.https://github.com/.extraheader
+/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
