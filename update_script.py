@@ -13,72 +13,65 @@ def update_naukri_profile():
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--window-size=400,800") # Mobile size
+    
+    # Emulating a real Android Mobile Device
+    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    
-    # Anti-detection script
-    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-        "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-    })
-
     wait = WebDriverWait(driver, 40)
 
     try:
-        print("Bhai, Login process shuru...")
+        print("Bhai, Mobile site se login try kar raha hoon...")
         driver.get("https://www.naukri.com/nlogin/login")
+        time.sleep(5)
+
+        # Checking if blocked
+        if "Access Denied" in driver.title or "Cloudflare" in driver.page_source:
+            print("❌ IP Blocked by Naukri. Changing strategy to direct profile hit...")
         
-        # Email field wait
-        email_field = wait.until(EC.element_to_be_clickable((By.ID, "usernameField")))
-        email_field.send_keys(os.environ['NAUKRI_EMAIL'])
-        
-        # Pass field
+        # Login
+        wait.until(EC.presence_of_element_located((By.ID, "usernameField"))).send_keys(os.environ['NAUKRI_EMAIL'])
         driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
         
-        # Login click via JS (More reliable)
         login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
         driver.execute_script("arguments[0].click();", login_btn)
         
-        print("Login done, waiting for session sync...")
+        print("Login clicked, waiting for redirect...")
         time.sleep(15) 
 
-        # Jump to Profile
-        print("Navigating to Profile...")
+        # Mobile Profile Page
         driver.get("https://www.naukri.com/mnjuser/profile")
+        print(f"Current URL: {driver.current_url}")
         time.sleep(10)
 
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
         if os.path.exists(resume_path):
-            print(f"Uploading: {resume_path}")
+            # Naukri Mobile par file input dhoondna
+            # Mobile site par ID 'attachCV' ki jagah simple file type hota hai
+            print("Searching for Mobile Upload button...")
             
-            # Naukri ka file input aksar display:none hota hai
-            # Hum usey JS se dhund kar seedha send_keys karenge
+            # Pure JavaScript upload trigger
             try:
-                # Targetting multiple possible IDs for resume upload
-                upload_xpath = "//input[@type='file' and contains(@id, 'attachCV') or @id='attachCV']"
-                attach_input = wait.until(EC.presence_of_element_located((By.XPATH, upload_xpath)))
-                
-                # Force visibility just in case
-                driver.execute_script("arguments[0].style.display = 'block'; arguments[0].style.visibility = 'visible';", attach_input)
-                attach_input.send_keys(resume_path)
-                
-                print("Upload command sent. Waiting for confirmation...")
-                time.sleep(20) 
-                print("🏁 Success: Profile refreshed!")
-            except Exception as upload_err:
-                print(f"Upload input not found directly. Fallback to general file input...")
-                driver.find_element(By.XPATH, "//input[@type='file']").send_keys(resume_path)
-                time.sleep(20)
-                print("🏁 Success: Profile refreshed via fallback!")
+                upload_input = driver.find_element(By.CSS_VALUE, "input[type='file']")
+            except:
+                upload_input = driver.find_element(By.XPATH, "//input[@type='file']")
+            
+            driver.execute_script("arguments[0].style.display = 'block';", upload_input)
+            upload_input.send_keys(resume_path)
+            
+            print("Wait for upload sync (20s)...")
+            time.sleep(20)
+            print("🏁 SUCCESS: Profile Refreshed via Mobile Site!")
         else:
-            print("❌ Error: Resume.pdf missing in repo!")
+            print("❌ Resume.pdf missing in repo!")
 
     except Exception as e:
         print(f"❌ Failed: {str(e)}")
         driver.save_screenshot("debug_error.png")
+        # Ye line help karegi dekhne mein ki exactly page par kya hai
+        print("Page Title was: " + driver.title)
     finally:
         driver.quit()
 
