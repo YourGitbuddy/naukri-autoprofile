@@ -1,25 +1,23 @@
 name: Naukri Auto Refresh
 on:
   schedule:
-    - cron: '0 4 * * *' # Ye har roz subah chalega (IST ke hisaab se)
-  workflow_dispatch:   # Isse aap "Run Workflow" button daba kar khud bhi check kar sakte hain
+    - cron: '0 4 * * *'
+  workflow_dispatch:
 
 jobs:
-  refresh-profile:
+  refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
+      - uses: actions/checkout@v3
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
-      - name: Install Dependencies
-        run: pip install requests
-
+      - name: Install dependencies
+        run: |
+          pip install selenium webdriver-manager
       - name: Run Script
         env:
-          NAUKRI_COOKIE: ${{ secrets.NAUKRI_COOKIE }}
+          NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
+          NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
         run: python update_script.py
