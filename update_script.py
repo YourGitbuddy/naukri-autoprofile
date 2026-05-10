@@ -14,25 +14,32 @@ def run_naukri_update():
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    # Masking to bypass bot detection
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 45)
+    wait = WebDriverWait(driver, 30) # 30 seconds max wait
 
     try:
-        print("Bhai, login start ho raha hai...")
+        print("Bhai, login shuru kar raha hoon...")
         driver.get("https://www.naukri.com/nlogin/login")
         
+        # Email field
         email_field = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
         driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
+        
+        # Password field
         driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
         
+        # Click login
         login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
         driver.execute_script("arguments[0].click();", login_btn)
         
-        time.sleep(15)
+        # Wait for session cookies to settle
+        print("Login button dabaya gaya, session ka wait...")
+        time.sleep(10)
 
-        print("Cookies transfer kar raha hoon...")
+        # Get Cookies
         session = requests.Session()
         for cookie in driver.get_cookies():
             session.cookies.set(cookie['name'], cookie['value'])
@@ -47,34 +54,23 @@ def run_naukri_update():
 
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
         if os.path.exists(resume_path):
-            # API Retry Logic
-            urls = [
-                'https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v1/users/self/resume',
-                'https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/resume'
-            ]
+            # Naukri ka most stable API URL
+            url = 'https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/resume'
             
-            success = False
-            for url in urls:
-                print(f"Trying API: {url}")
-                # File ko har baar naye siray se open karenge taaki 'closed file' error na aaye
-                with open(resume_path, 'rb') as f:
-                    files = {'resume': ('Resume.pdf', f, 'application/pdf')}
-                    response = session.post(url, headers=headers, files=files)
-                
-                if response.status_code in [200, 201, 204]:
-                    print(f"✅ Mission Success! Profile updated via {url.split('/')[-2]}.")
-                    success = True
-                    break
-                else:
-                    print(f"❌ Failed for {url.split('/')[-2]} (Status: {response.status_code})")
+            print(f"API se upload try kar raha hoon...")
+            with open(resume_path, 'rb') as f:
+                files = {'resume': ('Resume.pdf', f, 'application/pdf')}
+                response = session.post(url, headers=headers, files=files)
             
-            if not success:
-                print("❌ Dono API fail ho gayi hain.")
+            if response.status_code in [200, 201, 204]:
+                print("✅ Mission Accomplished! Status Updated.")
+            else:
+                print(f"❌ API fail hui (Status: {response.status_code})")
         else:
-            print("❌ Resume.pdf nahi mili repo mein.")
+            print("❌ Resume.pdf missing!")
 
     except Exception as e:
-        print(f"❌ Error aayi: {str(e)}")
+        print(f"❌ Error: {str(e)}")
     finally:
         driver.quit()
 
