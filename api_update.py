@@ -1,6 +1,5 @@
 import os
 import time
-import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -9,75 +8,66 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-def run_hardened_refresh():
+def run_ui_refresh():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 30)
+    wait = WebDriverWait(driver, 40)
 
     try:
-        print("Bhai, Resilient login shuru kar raha hoon...")
+        print("Bhai, Login page load kar raha hoon...")
         driver.get("https://www.naukri.com/nlogin/login")
-        time.sleep(5)
-
-        # Use JS to inject credentials directly (Bypasses "Not Interactable" errors)
-        email = os.environ['NAUKRI_EMAIL']
-        password = os.environ['NAUKRI_PASS']
         
-        driver.execute_script(f"document.getElementById('usernameField').value='{email}';")
-        driver.execute_script(f"document.getElementById('passwordField').value='{password}';")
+        # Inject Credentials
+        driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
+        driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
         
-        print("Credentials injected. Clicking Login...")
-        login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
-        driver.execute_script("arguments[0].click();", login_btn)
+        # Login Click
+        driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[text()='Login']"))
+        print("Login done. Profile page par ja raha hoon...")
         
         time.sleep(10)
+        driver.get("https://www.naukri.com/mnjuser/profile")
         
-        # Step 2: Session verify aur Cookies nikalna
-        selenium_cookies = driver.get_cookies()
-        if not selenium_cookies:
-            raise Exception("Cookies empty hain, login fail hua shayad.")
-
-        session = requests.Session()
-        for cookie in selenium_cookies:
-            session.cookies.set(cookie['name'], cookie['value'])
-
-        # Step 3: API Update (Headline)
-        profile_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-headline"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "Appid": "109",
-            "Systemid": "109",
-            "Content-Type": "application/json",
-            "X-Requested-With": "XMLHttpRequest",
-            "Referer": "https://www.naukri.com/mnjuser/profile"
-        }
-
-        res = session.get(profile_url, headers=headers)
-        if res.status_code == 200:
-            data = res.json()
-            headline = data.get('resumeHeadline', 'Azure Infrastructure Engineer')
-            new_headline = headline[:-1] if headline.endswith('.') else headline + '.'
-            
-            update_res = session.put(profile_url, json={"resumeHeadline": new_headline}, headers=headers)
-            if update_res.status_code in [200, 204]:
-                print("🏁 MISSION ACCOMPLISHED: Profile refresh success via JS injection!")
-            else:
-                print(f"❌ API Update failed: {update_res.status_code}")
-        else:
-            print(f"❌ Failed to fetch headline: {res.status_code}. Response: {res.text[:100]}")
+        # Wait for Headline Section
+        print("Headline dhoond raha hoon...")
+        edit_btn_xpath = "//span[text()='Resume headline']/following-sibling::span[contains(@class,'edit')]"
+        
+        # Scroll to element and click using JS
+        edit_btn = wait.until(EC.presence_of_element_located((By.XPATH, edit_btn_xpath)))
+        driver.execute_script("arguments[0].scrollIntoView(true);", edit_btn)
+        time.sleep(2)
+        driver.execute_script("arguments[0].click();", edit_btn)
+        
+        # Edit Text
+        headline_txt = wait.until(EC.presence_of_element_located((By.ID, "resumeHeadlineTxt")))
+        current_val = headline_txt.get_attribute("value")
+        
+        new_val = current_val[:-1] if current_val.endswith('.') else current_val + '.'
+        
+        # Force clear and send keys via JS to be safe
+        driver.execute_script("arguments[0].value = '';", headline_txt)
+        headline_txt.send_keys(new_val)
+        
+        # Save
+        save_btn = driver.find_element(By.XPATH, "//button[text()='Save']")
+        driver.execute_script("arguments[0].click();", save_btn)
+        
+        print(f"🏁 MISSION ACCOMPLISHED: Profile refreshed via UI Update!")
+        time.sleep(5)
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         driver.save_screenshot("debug_error.png")
+        # Artifact upload ke liye error throw karna zaroori hai
+        raise e
     finally:
         driver.quit()
 
 if __name__ == "__main__":
-    run_hardened_refresh()
+    run_ui_refresh()
