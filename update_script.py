@@ -2,7 +2,8 @@ import os
 import cloudscraper
 import json
 
-def run():
+def run_invisible_refresh():
+    # Chrome Desktop mimic kar rahe hain
     scraper = cloudscraper.create_scraper(
         browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
     )
@@ -12,52 +13,52 @@ def run():
         "Appid": "109",
         "Systemid": "109",
         "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
+        "X-Requested-With": "XMLHttpRequest",
+        "Origin": "https://www.naukri.com"
     }
     
     try:
-        # 1. Login
-        print("Bhai, Login shuru kar raha hoon...")
+        # Step 1: Login
+        print("Logging in...")
         auth_url = "https://www.naukri.com/nlogin/login"
-        payload = {"username": os.environ['NAUKRI_EMAIL'], "password": os.environ['NAUKRI_PASS']}
-        res = scraper.post(auth_url, json=payload, headers=headers)
+        login_payload = {"username": os.environ['NAUKRI_EMAIL'], "password": os.environ['NAUKRI_PASS']}
+        res = scraper.post(auth_url, json=login_payload, headers=headers)
         
         if res.status_code != 200:
-            print(f"❌ Login failed: {res.status_code}")
+            print(f"Login Failed: {res.status_code}")
             return
         
-        print("✅ Login Success! Fetching Profile Summary...")
+        print("Login Success! Toggling Invisible Space...")
 
-        # 2. Get Current Summary
-        # Naukri uses this gateway for profile services
-        profile_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary"
-        profile_res = scraper.get(profile_url, headers=headers)
+        # Step 2: Get current Profile Summary
+        # Note: Ye endpoint humesha stable rehta hai
+        summary_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary"
+        get_res = scraper.get(summary_url, headers=headers)
         
-        if profile_res.status_code == 200:
-            data = profile_res.json()
-            current_summary = data.get('summary', 'Azure Infrastructure and Data Engineer')
+        if get_res.status_code == 200:
+            current_data = get_res.json()
+            summary_text = current_data.get('summary', 'Azure Infrastructure and Data Engineer')
             
-            # 3. Toggle a dot (.) at the end
-            if current_summary.endswith('.'):
-                new_summary = current_summary[:-1]
+            # Invisible Logic: Agar last mein space hai to hata do, nahi hai to ek space add kar do.
+            # Ye space UI par kisi ko nahi dikhega.
+            if summary_text.endswith(' '):
+                new_summary = summary_text.rstrip()
             else:
-                new_summary = current_summary + '.'
+                new_summary = summary_text + ' '
             
-            print(f"Refreshing profile by toggling headline...")
+            # Step 3: PUT request to save the change
             update_payload = {"summary": new_summary}
-            
-            # PUT request to refresh 'Updated Today' status
-            update_res = scraper.put(profile_url, json=update_payload, headers=headers)
+            update_res = scraper.put(summary_url, json=update_payload, headers=headers)
             
             if update_res.status_code in [200, 204]:
-                print("🏁 MISSION ACCOMPLISHED: Profile Refreshed! (Status: Updated Today)")
+                print("🏁 SUCCESS: Invisible update complete! Profile updated status refreshed.")
             else:
-                print(f"❌ Update failed: {update_res.status_code}")
+                print(f"Update failed with status: {update_res.status_code}")
         else:
-            print(f"❌ Could not fetch profile data: {profile_res.status_code}")
+            print(f"Could not fetch summary: {get_res.status_code}")
 
     except Exception as e:
-        print(f"❌ Exception occurred: {str(e)}")
+        print(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    run()
+    run_invisible_refresh()
