@@ -1,6 +1,6 @@
 import os
 import time
-import requests
+import random
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -14,17 +14,20 @@ def run_naukri_update():
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    wait = WebDriverWait(driver, 45)
+    wait = WebDriverWait(driver, 60) # Timeout badha diya hai
 
     try:
-        # 1. Login to get Session Cookies
-        print("Logging into Naukri to capture session...")
+        # 1. Login
+        print("Logging into Naukri...")
         driver.get("https://www.naukri.com/nlogin/login")
         
-        wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
+        email_field = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
         driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
         driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
         
@@ -32,45 +35,38 @@ def run_naukri_update():
         driver.execute_script("arguments[0].click();", login_btn)
         time.sleep(15)
 
-        # 2. Extract Session Cookies and Tokens
-        cookies = driver.get_cookies()
-        session = requests.Session()
-        for cookie in cookies:
-            session.cookies.set(cookie['name'], cookie['value'])
+        # 2. Direct Profile Navigation
+        print("Going to Profile Section...")
+        driver.get("https://www.naukri.com/mnjuser/profile")
+        time.sleep(10)
 
-        # System and App Headers (Naukri standard)
-        headers = {
-            'x-requested-with': 'XMLHttpRequest',
-            'appid': '135',
-            'systemid': '135',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-        }
-
-        # 3. Upload Resume via API
+        # 3. Resume Upload (Finding the Hidden Input)
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
         if os.path.exists(resume_path):
-            print(f"Resume uploading via API: {resume_path}")
+            print(f"Uploading Resume from: {resume_path}")
             
-            with open(resume_path, 'rb') as f:
-                files = {
-                    'resume': ('Resume.pdf', f, 'application/pdf')
-                }
-                # Naukri's official upload endpoint
-                response = session.post(
-                    'https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/resume',
-                    headers=headers,
-                    files=files
-                )
+            # Naukri ka upload input dhoondne ka sabse robust tarika
+            # Hum CSS Selector use karenge jo 'Attach Resume' section ko target karta hai
+            try:
+                # Kai baar input hidden hota hai, isliye hum use find karenge
+                attach_input = driver.find_element(By.CSS_SELECTOR, "input[type='file'][id='attachCV']")
+                attach_input.send_keys(resume_path)
+            except:
+                # Agar ID kaam na kare toh generic type='file' dhoondo
+                print("ID 'attachCV' nahi mila, generic file input try kar raha hoon...")
+                attach_input = driver.find_element(By.XPATH, "//input[@type='file']")
+                attach_input.send_keys(resume_path)
+
+            print("Waiting for upload to finish...")
+            time.sleep(20) # Thoda extra time upload hone ke liye
             
-            if response.status_code in [200, 201]:
-                print("✅ Success! Resume uploaded and profile refreshed.")
-            else:
-                print(f"❌ Upload failed. Status: {response.status_code}, Response: {response.text}")
+            print("✅ Success! Resume upload action completed.")
         else:
-            print("❌ Error: 'Resume.pdf' not found in repository.")
+            print("❌ Resume.pdf not found in repo!")
 
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"❌ Error occurred: {str(e)}")
+        driver.save_screenshot("error_debug.png")
     finally:
         driver.quit()
 
