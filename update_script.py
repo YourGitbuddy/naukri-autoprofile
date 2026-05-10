@@ -11,9 +11,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 def run_naukri_update():
-    toggle = "." if random.randint(0, 1) == 0 else "" 
-    current_time = datetime.now().strftime("%d %b %Y")
-    
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -21,63 +18,50 @@ def run_naukri_update():
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     wait = WebDriverWait(driver, 45)
 
     try:
-        print("Bypass start: Google par ja raha hoon...")
-        driver.get("https://www.google.com")
-        time.sleep(2)
-
-        print("Naukri login page load kar raha hoon...")
+        # 1. Login Process
+        print("Logging into Naukri...")
         driver.get("https://www.naukri.com/nlogin/login")
         
-        # Element ka wait karenge
-        email_field = wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
-        
-        # JS se value set karenge (Interactable error bypass karne ke liye)
-        print("JavaScript se credentials fill kar raha hoon...")
+        wait.until(EC.presence_of_element_located((By.ID, "usernameField")))
         driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
         driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
         
-        time.sleep(2)
-        # Login button par click
         login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
         driver.execute_script("arguments[0].click();", login_btn)
-        
-        print("Login button dabaya gaya. Waiting for session setup...")
         time.sleep(15)
 
-        # Content Update Logic
-        headline = f"Azure Infrastructure and Data Engineer | Synapse | Bicep | AKS{toggle}"
-        summary = f"Azure Infrastructure Engineer specializing in Synapse, Bicep, and AKS. (Last updated: {current_time})"
+        # 2. Go to Profile Page
+        print("Navigating to Profile Page for Resume Upload...")
+        driver.get("https://www.naukri.com/mnjuser/profile")
+        time.sleep(10)
 
-        print("Force Refreshing via API...")
-        driver.execute_script(f"""
-            // Resume Headline update
-            fetch('https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/resume-headline', {{
-                method: 'PUT',
-                headers: {{ 'Content-Type': 'application/json', 'appid': '135', 'systemid': '135' }},
-                body: JSON.stringify({{ "resumeHeadline": "{headline}" }})
-            }});
-
-            // Profile Summary update
-            fetch('https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary', {{
-                method: 'PUT',
-                headers: {{ 'Content-Type': 'application/json', 'appid': '135', 'systemid': '135' }},
-                body: JSON.stringify({{ "summary": "{summary}" }})
-            }});
-        """)
+        # 3. Resume Upload Logic
+        # Resume file ka absolute path nikalna (GitHub runner ke liye)
+        resume_path = os.path.join(os.getcwd(), "Resume.pdf")
         
-        print(f"Success! Profile refreshed with toggle '{toggle}'")
-        time.sleep(5)
+        if os.path.exists(resume_path):
+            print(f"Resume mil gaya: {resume_path}. Uploading...")
+            
+            # Naukri par hidden input field dhoondna jo file accept karti hai
+            upload_input = driver.find_element(By.XPATH, "//input[@type='file']")
+            upload_input.send_keys(resume_path)
+            
+            print("Resume upload request bhej di gayi hai.")
+            time.sleep(15) # Upload hone ka wait
+            
+            # Check success message if any (optional)
+            print("Kaam ho gaya! Resume update ho chuka hai.")
+        else:
+            print("Error: 'Resume.pdf' file repo mein nahi mili! Please check naming.")
 
     except Exception as e:
         print(f"Error: {str(e)}")
-        driver.save_screenshot("error_debug.png") # Debugging ke liye screenshot
     finally:
         driver.quit()
 
