@@ -1,81 +1,73 @@
 import os
 import time
+import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.by import By
 
-def run_manual_trigger_upload():
+def run_silent_sniper():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
     try:
-        print("Bhai, Manual Trigger Mission shuru...")
+        print("Bhai, Silent Sniper Mission shuru...")
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(5)
 
-        # 1. Login
+        # 1. Login via Selenium
         driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
         driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
-        driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[text()='Login']"))
+        driver.find_element("xpath", "//button[text()='Login']").click()
         
-        print("✅ Login Success. Profile par ja raha hoon...")
+        print("✅ Login Success. Cookies extract kar raha hoon...")
         time.sleep(15) 
-        driver.get("https://www.naukri.com/mnjuser/profile")
-        time.sleep(10)
 
-        # 2. Resume Path check
+        # 2. Extract Cookies
+        session = requests.Session()
+        for cookie in driver.get_cookies():
+            session.cookies.set(cookie['name'], cookie['value'])
+
+        # 3. Direct API Upload
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
-        if not os.path.exists(resume_path):
-            print("❌ Resume.pdf nahi mili!")
-            return
-
-        # 3. JS Magic: Sabse pehle 'Update Resume' ka asli button trigger karo
-        print("🔄 UI se Resume update trigger kar raha hoon...")
-        
-        # Yeh script hidden input dhoond kar usmein file daal degi
-        # Naukri ke har version mein ek invisible input hota hai upload ke liye
-        js_upload = """
-        let fileInput = document.querySelector('input[type="file"]');
-        if (fileInput) {
-            return "INPUT_FOUND";
-        } else {
-            // Agar input nahi mila, toh 'Update' button click karke dhoondo
-            let buttons = Array.from(document.querySelectorAll('a, button, span'));
-            let upBtn = buttons.find(b => b.innerText.toLowerCase().includes('update resume'));
-            if(upBtn) {
-                upBtn.click();
-                return "BUTTON_CLICKED";
+        if os.path.exists(resume_path):
+            print(f"🚀 Resume mil gaya. API Tunneling shuru...")
+            
+            # Naukri Profile Update API
+            url = "https://www.naukri.com/mnjuser/profile/uploadResume"
+            
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "X-Requested-With": "XMLHttpRequest",
+                "Origin": "https://www.naukri.com",
+                "Referer": "https://www.naukri.com/mnjuser/profile"
             }
-        }
-        return "NOT_FOUND";
-        """
-        
-        status = driver.execute_script(js_upload)
-        print(f"Initial Status: {status}")
-        time.sleep(5)
 
-        # Final Attempt to send file
-        try:
-            file_input = driver.find_element(By.CSS_SELECTOR, "input[type='file']")
-            file_input.send_keys(resume_path)
-            print("📤 File uploading...")
-            time.sleep(15) # Wait for progress bar to finish
-            print("🏁 MISSION ACCOMPLISHED: UI ne confirm kiya update!")
-        except:
-            print("⚠️ UI element nahi mila, par visit refresh ho gaya hai.")
+            with open(resume_path, 'rb') as f:
+                files = {'resume': ('Resume.pdf', f, 'application/pdf')}
+                data = {'isResumeUpload': '1'}
+                response = session.post(url, files=files, data=data, headers=headers)
+
+            # Verification logic
+            if response.status_code == 200:
+                print("🏁 MISSION ACCOMPLISHED: Resume updated successfully via Backend!")
+                # Optional: Ek baar profile visit kar lo 'Last Active' update karne ke liye
+                driver.get("https://www.naukri.com/mnjuser/profile")
+                time.sleep(5)
+            else:
+                print(f"❌ API Error: {response.status_code}. Profile status: {response.text[:100]}")
+        else:
+            print("❌ Error: Resume.pdf nahi mili!")
 
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"❌ Critical Exception: {str(e)}")
     finally:
         driver.quit()
 
 if __name__ == "__main__":
-    run_manual_trigger_upload()
+    run_silent_sniper()
