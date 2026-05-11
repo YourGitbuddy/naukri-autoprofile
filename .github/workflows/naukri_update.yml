@@ -2,25 +2,34 @@ name: Naukri Profile Refresh
 
 on:
   schedule:
-    - cron: '45 3 * * *' 
+    # Daily at 9:15 AM IST
+    - cron: '45 3 * * *'
+
   workflow_dispatch:
 
 jobs:
-  refresh:
+  refresh-profile:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
+      - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: 🐍 Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
-        run: pip install selenium webdriver-manager requests
+      - name: 📦 Install Dependencies
+        run: |
+          pip install selenium webdriver-manager
 
-      - name: Run Final Boss Uploader
+      - name: 🌐 Install Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: 🚀 Run Naukri Auto Refresh
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
