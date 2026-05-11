@@ -1,94 +1,100 @@
 import os
 import time
+import random
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
 
-def run_brute_force_refresh():
+def run_stealth_refresh():
     chrome_options = Options()
+    # Headless mode ko thoda change kiya hai (New Headless)
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1920,1080")
+    
+    # Ye headers bot detection bypass karne ke liye zaroori hain
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-    actions = ActionChains(driver)
+    
+    # Anti-bot script: Webdriver flag ko remove karta hai
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+        "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+    })
 
     try:
-        print("Bhai, Brute Force Login shuru...")
+        print("Bhai, Stealth mode mein login shuru...")
         driver.get("https://www.naukri.com/nlogin/login")
-        time.sleep(5)
+        time.sleep(random.uniform(5, 8)) # Random wait
 
-        # Step 1: Login
-        driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
-        driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
-        driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[text()='Login']"))
+        # Typing simulation (JS use karenge but with a delay)
+        email = os.environ['NAUKRI_EMAIL']
+        password = os.environ['NAUKRI_PASS']
         
-        print("Login done. Profile page par ja raha hoon...")
-        time.sleep(15)
+        driver.execute_script(f"document.getElementById('usernameField').value='{email}';")
+        time.sleep(2)
+        driver.execute_script(f"document.getElementById('passwordField').value='{password}';")
+        time.sleep(2)
+        
+        login_btn = driver.find_element(By.XPATH, "//button[text()='Login']")
+        driver.execute_script("arguments[0].click();", login_btn)
+        
+        print("Login clicked. Profile load hone ka wait...")
+        time.sleep(random.uniform(15, 20))
+
+        # Seedha API hit karne ki koshish (UI bypass)
+        # Agar UI nahi dikh raha, toh hum background update try karenge
         driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(10)
 
-        # Step 2: Try updating Headline/Summary via standard JS injection first (Fastest)
-        # Using a very broad script to find ANY text container
-        print("Finding ANY updateable field...")
-        update_success = driver.execute_script("""
-            let fields = document.querySelectorAll('textarea, [contenteditable="true"], #resumeHeadlineTxt, .desc');
-            if (fields.length > 0) {
-                let area = fields[0];
-                area.focus();
-                let val = area.value || area.innerText;
-                let newVal = val.endsWith('.') ? val.slice(0, -1) : val + '.';
-                if(area.value !== undefined) area.value = newVal;
-                else area.innerText = newVal;
-                return true;
-            }
-            return false;
-        """)
+        # Update logic: Sabse safe hai Resume Headline toggle karna
+        # Hum generic XPath use karenge jo Campus aur Normal dono par chale
+        print("Refreshing via Headline/Summary toggle...")
+        
+        script = """
+        let section = document.querySelector('.profile-summary') || document.querySelector('.resumeHeadline');
+        let edit = section ? section.querySelector('.edit') : document.querySelector('.icon-edit');
+        if(edit) {
+            edit.click();
+            return true;
+        }
+        return false;
+        """
+        success = driver.execute_script(script)
 
-        if update_success:
-            print("Field mil gaya! Saving...")
-            # Try to hit Enter or find a Save button
-            actions.send_keys(Keys.ENTER).perform()
-            time.sleep(5)
-            driver.execute_script("Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Save')).click();")
-            print("🏁 MISSION ACCOMPLISHED: Updated via JS Injection!")
-        else:
-            # Step 3: Keyboard Brute Force (The "Tab-Tab-Enter" Method)
-            print("JS fail ho gaya. Keyboard simulation shuru...")
-            # Profile page par resume upload button aksar first few tabs mein hota hai
-            actions.send_keys(Keys.PAGE_DOWN).perform()
+        if success:
+            time.sleep(3)
+            # Find any textarea and toggle a dot
+            driver.execute_script("""
+                let area = document.querySelector('textarea') || document.querySelector('#resumeHeadlineTxt');
+                if(area) {
+                    let v = area.value;
+                    area.value = v.endsWith('.') ? v.slice(0, -1) : v + '.';
+                    // Trigger 'input' event so 'Save' button enables
+                    area.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            """)
             time.sleep(2)
-            
-            # Send Keys to the 'body' directly
-            body = driver.find_element(By.TAG_NAME, "body")
+            driver.execute_script("document.querySelector('button[type=\"submit\"], .btn-save, #saveHeadlineBtn').click();")
+            print("🏁 MISSION ACCOMPLISHED: Stealth update success!")
+        else:
+            # Final Fallback: Direct Resume Upload (Hardened)
+            print("UI toggle fail. Trying direct file upload...")
             resume_path = os.path.join(os.getcwd(), "Resume.pdf")
-            
-            # Hum saare file inputs dhoond kar sabme path bhej denge (Shotgun approach)
-            file_inputs = driver.find_elements(By.XPATH, "//input[@type='file']")
-            if file_inputs:
-                for f_input in file_inputs:
-                    try:
-                        f_input.send_keys(resume_path)
-                        print(f"File sent to an input field!")
-                    except:
-                        continue
-                print("🏁 MISSION ACCOMPLISHED: Resume sent to all available file slots!")
-            else:
-                # If still nothing, take a screenshot and bail
-                driver.save_screenshot("debug_error.png")
-                print("❌ Bhai, page par kuch mil hi nahi raha. Screenshot check kar.")
+            file_input = driver.find_element(By.CSS_SELECTOR, "input[type='file']")
+            file_input.send_keys(resume_path)
+            print("🏁 MISSION ACCOMPLISHED: Resume re-uploaded via stealth!")
 
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"❌ Stealth mode fail: {str(e)}")
         driver.save_screenshot("debug_error.png")
     finally:
         driver.quit()
 
 if __name__ == "__main__":
-    run_brute_force_refresh()
+    run_stealth_refresh()
