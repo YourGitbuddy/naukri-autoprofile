@@ -7,7 +7,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 
-def run_universal_sync():
+def run_universal_clean_update():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -16,27 +16,11 @@ def run_universal_sync():
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     
-    # --- 📂 Path Finder Logic ---
-    # Ye script khud dhoondegi ki Resume.pdf kahan hai
-    resume_file = None
-    possible_names = ["Resume.pdf", "resume.pdf"]
-    
-    for name in possible_names:
-        if os.path.exists(name):
-            resume_file = name
-            break
-            
-    if not resume_file:
-        # Agar root mein nahi mili, toh check karo agar folder ke andar hai
-        current_dir_files = os.listdir('.')
-        print(f"📁 Current Files in Repo: {current_dir_files}")
-        print("❌ Error: Resume.pdf nahi mili. Make sure ye main folder mein hai.")
-        driver.quit()
-        return
-
-    print(f"🎯 Target Found: {resume_file}. Starting Sync...")
+    # Auto-detect path
+    resume_path = os.path.join(os.getcwd(), "Resume.pdf")
 
     try:
+        print("🌐 Universal Clean Mode: Starting...")
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(5)
 
@@ -46,38 +30,45 @@ def run_universal_sync():
         driver.find_element(By.XPATH, "//button[text()='Login']").click()
         time.sleep(10)
 
-        # 2. Session Capture
+        # 2. Session Setup
         session = requests.Session()
         for cookie in driver.get_cookies():
             session.cookies.set(cookie['name'], cookie['value'])
 
-        # 3. Privacy-Friendly Headline Toggle
-        # (Koi VFX ya Azure text hardcoded nahi hai)
+        headers = {
+            "Clientid": "d36980564696075936856",
+            "Appid": "121",
+            "Systemid": "121",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+
+        # 3. Privacy Headline Refresh (No VFX/Azure hardcoding)
         h_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/profile-headline"
-        h_headers = {"Clientid": "d36980564696075936856", "Appid": "121", "Systemid": "121", "Content-Type": "application/json"}
-        
-        get_res = session.get(h_url, headers=h_headers)
-        if get_res.status_code == 200:
-            curr = get_res.json().get('resumeHeadline', 'Professional')
+        res = session.get(h_url, headers=headers)
+        if res.status_code == 200:
+            curr = res.json().get('resumeHeadline', 'Professional')
             new_h = curr[:-1] if curr.endswith('.') else curr + "."
-            session.put(h_url, json={"resumeHeadline": new_h}, headers=h_headers)
-            print("✅ Profile Activity: Timestamp Updated.")
+            session.put(h_url, json={"resumeHeadline": new_h}, headers=headers)
+            print("✅ Profile Activity: Refreshed.")
 
-        # 4. Final Resume Upload
-        with open(resume_file, 'rb') as f:
-            u_res = session.post(
-                "https://www.naukri.com/mnjuser/profile/uploadResume", 
-                files={'resume': (resume_file, f, 'application/pdf')}, 
-                data={'isResumeUpload': '1'}, 
-                headers={"User-Agent": "Mozilla/5.0", "X-Requested-With": "XMLHttpRequest"}
-            )
-            if u_res.status_code == 200:
-                print(f"🏁 MISSION ACCOMPLISHED: {resume_file} is now live!")
-
+        # 4. Forced Resume Upload (API Sniper)
+        if os.path.exists(resume_path):
+            with open(resume_path, 'rb') as f:
+                u_res = session.post(
+                    "https://www.naukri.com/mnjuser/profile/uploadResume", 
+                    files={'resume': ('Resume.pdf', f, 'application/pdf')}, 
+                    data={'isResumeUpload': '1'}, 
+                    headers={"User-Agent": "Mozilla/5.0", "X-Requested-With": "XMLHttpRequest"}
+                )
+                if u_res.status_code == 200:
+                    print("🏁 FINAL STATUS: Resume pushed to server successfully.")
+        
     except Exception as e:
         print(f"⚠️ Error: {str(e)}")
     finally:
         driver.quit()
 
 if __name__ == "__main__":
-    run_universal_sync()
+    run_universal_clean_update()
