@@ -6,85 +6,89 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 
-def run_ultimate_refresh():
+def run_brute_force_refresh():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+    actions = ActionChains(driver)
 
     try:
-        print("Bhai, Ultimate Login shuru kar raha hoon...")
+        print("Bhai, Brute Force Login shuru...")
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(5)
 
-        # Step 1: Login via direct JS Injection
+        # Step 1: Login
         driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
         driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
         driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[text()='Login']"))
         
-        print("Login done. Forcing Profile Update...")
+        print("Login done. Profile page par ja raha hoon...")
         time.sleep(15)
-
-        # Step 2: Jump directly to the Summary Edit URL if possible, else use standard profile
         driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(10)
 
-        # Step 3: Hard-Target the textarea using JS focus then Selenium keys
-        # Naukri Campus usually has a textarea for 'Profile Summary'
-        print("Targeting Summary Textarea...")
-        
-        script = """
-        let area = document.querySelector('textarea') || document.querySelector('.desc') || document.querySelector('#summary-textarea');
-        if(area) {
-            area.focus();
-            return true;
-        }
-        return false;
-        """
-        found = driver.execute_script(script)
+        # Step 2: Try updating Headline/Summary via standard JS injection first (Fastest)
+        # Using a very broad script to find ANY text container
+        print("Finding ANY updateable field...")
+        update_success = driver.execute_script("""
+            let fields = document.querySelectorAll('textarea, [contenteditable="true"], #resumeHeadlineTxt, .desc');
+            if (fields.length > 0) {
+                let area = fields[0];
+                area.focus();
+                let val = area.value || area.innerText;
+                let newVal = val.endsWith('.') ? val.slice(0, -1) : val + '.';
+                if(area.value !== undefined) area.value = newVal;
+                else area.innerText = newVal;
+                return true;
+            }
+            return false;
+        """)
 
-        if found:
-            element = driver.switch_to.active_element
-            val = element.get_attribute("value") or "Azure Infrastructure Engineer"
-            
-            # Toggle dot
-            new_val = val[:-1] if val.endswith('.') else val + '.'
-            
-            # Select all and replace
-            element.send_keys(Keys.CONTROL + "a")
-            element.send_keys(Keys.BACKSPACE)
-            element.send_keys(new_val)
+        if update_success:
+            print("Field mil gaya! Saving...")
+            # Try to hit Enter or find a Save button
+            actions.send_keys(Keys.ENTER).perform()
+            time.sleep(5)
+            driver.execute_script("Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Save')).click();")
+            print("🏁 MISSION ACCOMPLISHED: Updated via JS Injection!")
+        else:
+            # Step 3: Keyboard Brute Force (The "Tab-Tab-Enter" Method)
+            print("JS fail ho gaya. Keyboard simulation shuru...")
+            # Profile page par resume upload button aksar first few tabs mein hota hai
+            actions.send_keys(Keys.PAGE_DOWN).perform()
             time.sleep(2)
             
-            # Click Save using a broad search
-            save_script = """
-            let btns = Array.from(document.querySelectorAll('button'));
-            let saveBtn = btns.find(b => b.innerText.includes('Save'));
-            if(saveBtn) { saveBtn.click(); return true; }
-            return false;
-            """
-            driver.execute_script(save_script)
-            print(f"🏁 MISSION ACCOMPLISHED: Profile refreshed with value toggle!")
-        else:
-            # Last ditch effort: Resume upload via Input type=file
-            print("Summary nahi mila, Resume re-upload try kar raha hoon...")
+            # Send Keys to the 'body' directly
+            body = driver.find_element(By.TAG_NAME, "body")
             resume_path = os.path.join(os.getcwd(), "Resume.pdf")
-            if os.path.exists(resume_path):
-                file_input = driver.find_element(By.CSS_SELECTOR, "input[type='file']")
-                file_input.send_keys(resume_path)
-                print("🏁 MISSION ACCOMPLISHED: Resume uploaded via generic selector!")
+            
+            # Hum saare file inputs dhoond kar sabme path bhej denge (Shotgun approach)
+            file_inputs = driver.find_elements(By.XPATH, "//input[@type='file']")
+            if file_inputs:
+                for f_input in file_inputs:
+                    try:
+                        f_input.send_keys(resume_path)
+                        print(f"File sent to an input field!")
+                    except:
+                        continue
+                print("🏁 MISSION ACCOMPLISHED: Resume sent to all available file slots!")
             else:
-                raise Exception("Bhai, Resume.pdf file hi nahi mili repo mein!")
+                # If still nothing, take a screenshot and bail
+                driver.save_screenshot("debug_error.png")
+                print("❌ Bhai, page par kuch mil hi nahi raha. Screenshot check kar.")
 
     except Exception as e:
-        print(f"❌ Abhi bhi lafda hai: {str(e)}")
+        print(f"❌ Error: {str(e)}")
         driver.save_screenshot("debug_error.png")
     finally:
         driver.quit()
 
 if __name__ == "__main__":
-    run_ultimate_refresh()
+    run_brute_force_refresh()
