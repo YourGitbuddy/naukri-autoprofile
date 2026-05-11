@@ -11,9 +11,13 @@ def run_clean_update():
 
     options = uc.ChromeOptions()
 
+    options.add_argument("--headless=old")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
+
+    options.add_argument("--disable-blink-features=AutomationControlled")
 
     options.add_argument(
         "user-agent=Mozilla/5.0 "
@@ -25,9 +29,8 @@ def run_clean_update():
 
     driver = uc.Chrome(
         version_main=147,
-        headless=True,
-        use_subprocess=True,
-        options=options
+        options=options,
+        use_subprocess=False
     )
 
     wait = WebDriverWait(driver, 40)
@@ -40,9 +43,11 @@ def run_clean_update():
 
         driver.get("https://www.naukri.com/nlogin/login")
 
-        time.sleep(5)
+        time.sleep(8)
 
-        # EMAIL FIELD
+        print("🌐 Page Opened")
+
+        # EMAIL
         email = wait.until(
             EC.presence_of_element_located(
                 (By.XPATH, "//input[contains(@placeholder,'Email')]")
@@ -51,9 +56,9 @@ def run_clean_update():
 
         email.send_keys(os.environ["NAUKRI_EMAIL"])
 
-        print("✅ Email entered")
+        print("✅ Email Entered")
 
-        # PASSWORD FIELD
+        # PASSWORD
         password = driver.find_element(
             By.XPATH,
             "//input[@type='password']"
@@ -61,7 +66,7 @@ def run_clean_update():
 
         password.send_keys(os.environ["NAUKRI_PASS"])
 
-        print("✅ Password entered")
+        print("✅ Password Entered")
 
         # LOGIN BUTTON
         login_btn = driver.find_element(
@@ -71,45 +76,47 @@ def run_clean_update():
 
         login_btn.click()
 
-        print("🔐 Login clicked")
+        print("🔐 Login Clicked")
 
         time.sleep(15)
 
-        # OPEN PROFILE PAGE
+        # PROFILE PAGE
         driver.get("https://www.naukri.com/mnjuser/profile")
 
-        print("📄 Opening profile")
+        print("📄 Opening Profile")
 
         time.sleep(15)
 
-        # FIND FILE INPUT
+        # FILE INPUT
         upload_input = wait.until(
             EC.presence_of_element_located(
                 (By.CSS_SELECTOR, "input[type='file']")
             )
         )
 
-        print("📎 Upload input found")
+        print("📎 Upload Input Found")
 
-        # UPLOAD FILE
+        # UPLOAD
         upload_input.send_keys(resume_path)
 
-        print("📤 Resume uploading")
+        print("📤 Resume Uploading")
 
-        time.sleep(20)
+        time.sleep(25)
 
-        print("✅ Resume uploaded successfully")
+        print("✅ Resume Uploaded Successfully")
 
     except Exception as e:
 
         print(f"❌ ERROR: {str(e)}")
 
-        # SAVE SCREENSHOT
-        driver.save_screenshot("error.png")
+        try:
+            driver.save_screenshot("error.png")
 
-        # SAVE PAGE SOURCE
-        with open("page_source.html", "w", encoding="utf-8") as f:
-            f.write(driver.page_source)
+            with open("page_source.html", "w", encoding="utf-8") as f:
+                f.write(driver.page_source)
+
+        except:
+            pass
 
     finally:
 
