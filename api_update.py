@@ -7,7 +7,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 
-def run_bazooka_update():
+def run_final_ultimate_update():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -18,7 +18,7 @@ def run_bazooka_update():
     resume_path = os.path.join(os.getcwd(), "Resume.pdf")
 
     try:
-        print("🚀 Bazooka Mission: Forced UI Injection Shuru...")
+        print("🚀 Final Mission: Absolute Force Update...")
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(5)
 
@@ -28,37 +28,7 @@ def run_bazooka_update():
         driver.find_element(By.XPATH, "//button[text()='Login']").click()
         time.sleep(10)
 
-        # 2. Go to Profile
-        driver.get("https://www.naukri.com/mnjuser/profile")
-        time.sleep(7)
-
-        # 3. Forced JavaScript Injection (The Bazooka)
-        # Ye direct browser ke backend se file input ko dhund ke file attach karega
-        print("💉 Injecting File via JavaScript...")
-        script = """
-        var input = document.querySelector("input[type='file']");
-        if (input) {
-            console.log('Input found, triggering upload...');
-            return true;
-        } else {
-            // Agar Campus UI hai toh shadow root dhoondo
-            var shadowHost = document.querySelector('naukri-resume-upload'); 
-            if(shadowHost) return 'shadow_found';
-            return false;
-        }
-        """
-        result = driver.execute_script(script)
-        
-        # UI upload trigger
-        file_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
-        for f_in in file_inputs:
-            try:
-                f_in.send_keys(resume_path)
-                print("✅ JavaScript Force Upload: Done!")
-            except:
-                continue
-
-        # 4. Backend API Fallback (Double Confirmation)
+        # 2. Direct API Sniper (Status 200 ke liye)
         session = requests.Session()
         for cookie in driver.get_cookies():
             session.cookies.set(cookie['name'], cookie['value'])
@@ -69,20 +39,31 @@ def run_bazooka_update():
             "User-Agent": "Mozilla/5.0"
         }
 
-        with open(resume_path, 'rb') as f:
-            files = {'resume': ('Resume.pdf', f, 'application/pdf')}
-            response = session.post("https://www.naukri.com/mnjuser/profile/uploadResume", 
-                                    files=files, data={'isResumeUpload': '1'}, headers=headers)
+        if os.path.exists(resume_path):
+            with open(resume_path, 'rb') as f:
+                res = session.post("https://www.naukri.com/mnjuser/profile/uploadResume", 
+                                    files={'resume': ('Resume.pdf', f, 'application/pdf')}, 
+                                    data={'isResumeUpload': '1'}, headers=headers)
+                if res.status_code == 200:
+                    print("✅ DATABASE: Resume successfully saved on Naukri server.")
 
-        if response.status_code == 200:
-            print("🏁 FINAL STATUS: Server Accept (200). UI Refresh Triggered.")
-        
-        # 5. Headline Update (To confirm activity)
-        h_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/profile-headline"
-        h_headers = {"Clientid": "d36980564696075936856", "Appid": "121", "Systemid": "121", "Content-Type": "application/json"}
-        res = session.get(h_url, headers=h_headers).json()
-        new_h = res['resumeHeadline'][:-1] if res['resumeHeadline'].endswith('.') else res['resumeHeadline'] + "."
-        session.put(h_url, json={"resumeHeadline": new_h}, headers=h_headers)
+        # 3. Forced Headline Refresh (With Error Handling)
+        try:
+            h_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/profile-headline"
+            h_headers = {"Clientid": "d36980564696075936856", "Appid": "121", "Systemid": "121", "Content-Type": "application/json"}
+            
+            get_h = session.get(h_url, headers=h_headers)
+            if get_h.status_code == 200:
+                data = get_h.json()
+                # Safe check for key
+                current_h = data.get('resumeHeadline', 'VFX Artist') 
+                new_h = current_h[:-1] if current_h.endswith('.') else current_h + "."
+                session.put(h_url, json={"resumeHeadline": new_h}, headers=h_headers)
+                print("✅ HEADLINE: Timestamp refreshed.")
+        except Exception as e:
+            print(f"⚠️ Headline Skip: {str(e)}")
+
+        print("🏁 MISSION ACCOMPLISHED: Check your profile now!")
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
@@ -90,4 +71,4 @@ def run_bazooka_update():
         driver.quit()
 
 if __name__ == "__main__":
-    run_bazooka_update()
+    run_final_ultimate_update()
