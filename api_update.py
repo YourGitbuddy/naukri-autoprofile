@@ -24,6 +24,7 @@ def run_clean_update():
     )
 
     driver = uc.Chrome(
+        version_main=147,
         headless=True,
         use_subprocess=True,
         options=options
@@ -41,7 +42,7 @@ def run_clean_update():
 
         time.sleep(5)
 
-        # EMAIL
+        # EMAIL FIELD
         email = wait.until(
             EC.presence_of_element_located(
                 (By.XPATH, "//input[contains(@placeholder,'Email')]")
@@ -52,7 +53,7 @@ def run_clean_update():
 
         print("✅ Email entered")
 
-        # PASSWORD
+        # PASSWORD FIELD
         password = driver.find_element(
             By.XPATH,
             "//input[@type='password']"
@@ -62,7 +63,7 @@ def run_clean_update():
 
         print("✅ Password entered")
 
-        # LOGIN
+        # LOGIN BUTTON
         login_btn = driver.find_element(
             By.XPATH,
             "//button[@type='submit']"
@@ -74,20 +75,23 @@ def run_clean_update():
 
         time.sleep(15)
 
-        # PROFILE PAGE
+        # OPEN PROFILE PAGE
         driver.get("https://www.naukri.com/mnjuser/profile")
 
         print("📄 Opening profile")
 
         time.sleep(15)
 
-        # FILE INPUT
+        # FIND FILE INPUT
         upload_input = wait.until(
             EC.presence_of_element_located(
                 (By.CSS_SELECTOR, "input[type='file']")
             )
         )
 
+        print("📎 Upload input found")
+
+        # UPLOAD FILE
         upload_input.send_keys(resume_path)
 
         print("📤 Resume uploading")
@@ -100,8 +104,10 @@ def run_clean_update():
 
         print(f"❌ ERROR: {str(e)}")
 
+        # SAVE SCREENSHOT
         driver.save_screenshot("error.png")
 
+        # SAVE PAGE SOURCE
         with open("page_source.html", "w", encoding="utf-8") as f:
             f.write(driver.page_source)
 
