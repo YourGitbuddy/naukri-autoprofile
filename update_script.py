@@ -12,7 +12,6 @@ def run_clean_update():
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("user-agent=Mozilla/5.0")
 
     driver = webdriver.Chrome(
         service=Service(ChromeDriverManager().install()),
@@ -22,6 +21,7 @@ def run_clean_update():
     resume_path = os.path.join(os.getcwd(), "Resume.pdf")
 
     try:
+
         print("🚀 Starting Naukri Refresh")
 
         driver.get("https://www.naukri.com/nlogin/login")
@@ -30,37 +30,38 @@ def run_clean_update():
 
         # LOGIN
         driver.find_element(By.ID, "usernameField").send_keys(
-            os.environ['NAUKRI_EMAIL']
+            os.environ["NAUKRI_EMAIL"]
         )
 
         driver.find_element(By.ID, "passwordField").send_keys(
-            os.environ['NAUKRI_PASS']
+            os.environ["NAUKRI_PASS"]
         )
 
         driver.find_element(By.XPATH, "//button[text()='Login']").click()
 
-        print("🔐 Login success")
+        print("✅ Login success")
 
         time.sleep(10)
 
-        # PROFILE PAGE
+        # OPEN PROFILE
         driver.get("https://www.naukri.com/mnjuser/profile")
 
         time.sleep(10)
 
-        # UPLOAD
+        # FIND FILE INPUT
         upload_input = driver.find_element(By.XPATH, "//input[@type='file']")
 
+        # UPLOAD RESUME
         upload_input.send_keys(resume_path)
 
         print("📤 Resume uploading...")
 
-        time.sleep(15)
+        time.sleep(20)
 
         print("✅ Resume uploaded successfully")
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ ERROR: {e}")
 
     finally:
         driver.quit()
