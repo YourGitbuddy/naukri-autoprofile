@@ -7,93 +7,72 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 
-def run_naukri_automation():
-    # --- Browser Setup ---
+def run_campus_fix():
     chrome_options = Options()
-    chrome_options.add_argument("--headless=new") # Background mein chalega
+    chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
     try:
-        print("Bhai, Naukri Automation shuru kar raha hoon...")
+        print("Bhai, Naukri Campus specific update shuru...")
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(5)
 
-        # 1. Login via UI
-        print("🔐 Logging in...")
+        # 1. Login
         driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
         driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
         driver.find_element(By.XPATH, "//button[text()='Login']").click()
         
-        print("✅ Login Success. Session capture kar raha hoon...")
-        time.sleep(15) # Wait for dashboard to load completely
+        print("✅ Login Success. Capturing Session...")
+        time.sleep(15)
 
-        # 2. Extract Session Cookies for API
         session = requests.Session()
         for cookie in driver.get_cookies():
             session.cookies.set(cookie['name'], cookie['value'])
 
-        # 3. Step 1: Resume Upload (Backend API)
-        # Isse recruiter search mein top par aoge
+        # 2. Campus Resume Upload API
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
         if os.path.exists(resume_path):
-            print("🚀 API se Resume upload kar raha hoon...")
-            upload_url = "https://www.naukri.com/mnjuser/profile/uploadResume"
+            print("🚀 Uploading to Campus Server...")
+            # Campus interface ke liye referer aur origin change karna zaroori hai
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "User-Agent": "Mozilla/5.0",
                 "X-Requested-With": "XMLHttpRequest",
-                "Referer": "https://www.naukri.com/mnjuser/profile"
+                "Referer": "https://www.naukri.com/mnjuser/profile",
+                "Origin": "https://www.naukri.com"
             }
+            
             with open(resume_path, 'rb') as f:
                 files = {'resume': ('Resume.pdf', f, 'application/pdf')}
-                payload = {'isResumeUpload': '1'}
-                response = session.post(upload_url, files=files, data=payload, headers=headers)
+                # Is endpoint se campus profiles refresh hoti hain
+                r = session.post("https://www.naukri.com/mnjuser/profile/uploadResume", 
+                                 files=files, data={'isResumeUpload': '1'}, headers=headers)
             
-            if response.status_code == 200:
-                print("✅ Resume API Upload: Success!")
-            else:
-                print(f"⚠️ Resume API failed with status: {response.status_code}")
+            if r.status_code == 200:
+                print("✅ API Upload successful.")
+            
+            # 3. FORCE REFRESH via UI (Sabse Important Step)
+            # Campus UI par bina click kiye update nahi dikhta
+            print("🔄 Triggering UI Save to clear the 'Upload Resume' box...")
+            driver.get("https://www.naukri.com/mnjuser/profile")
+            time.sleep(10)
+            
+            # Agar 'Upload' box abhi bhi dikh raha hai, toh use refresh marne ke liye page scroll karo
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)
+            driver.execute_script("window.scrollTo(0, 0);")
+            
+            print("🏁 MISSION ACCOMPLISHED: Check karo, ab 'Success' toast aana chahiye.")
         else:
-            print("❌ Error: Resume.pdf file nahi mili!")
-
-        # 4. Step 2: Headline Update (To Force UI Refresh)
-        # Isse dashboard par 'Updated Today' likha aayega
-        print("✍️ Headline refresh kar raha hoon...")
-        headline_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/profile-headline"
-        
-        # Azure Engineer Headline
-        headline_base = "Azure Infrastructure and Data Engineer | Azure Synapse | Bicep | Kubernetes (AKS)"
-        # Har baar different banane ke liye dot toggle
-        headline_final = headline_base + ("." if int(time.time()) % 2 == 0 else "")
-        
-        h_headers = {
-            "Content-Type": "application/json",
-            "Clientid": "d36980564696075936856",
-            "Appid": "121",
-            "Systemid": "121",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        }
-        
-        h_res = session.put(headline_url, json={"resumeHeadline": headline_final}, headers=h_headers)
-        
-        if h_res.status_code in [200, 201, 204]:
-            print("✅ Headline Refresh: Success!")
-        else:
-            print(f"⚠️ Headline API Error: {h_res.status_code}")
-
-        # 5. Final Step: Profile Page Visit
-        driver.get("https://www.naukri.com/mnjuser/profile")
-        time.sleep(5)
-        print("🏁 MISSION ACCOMPLISHED: Profile ek dum fresh hai!")
+            print("❌ Resume.pdf missing!")
 
     except Exception as e:
-        print(f"❌ Critical Error: {str(e)}")
-        driver.save_screenshot("debug_error.png")
+        print(f"❌ Error: {str(e)}")
     finally:
         driver.quit()
 
 if __name__ == "__main__":
-    run_naukri_automation()
+    run_campus_fix()
