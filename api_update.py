@@ -7,12 +7,11 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 
-def run_universal_clean_update():
+def run_clean_update():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+    chrome_options.add_argument("user-agent=Mozilla/5.0")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     
@@ -20,49 +19,30 @@ def run_universal_clean_update():
     resume_path = os.path.join(os.getcwd(), "Resume.pdf")
 
     try:
-        print("🌐 Universal Clean Mode: Starting...")
+        print("🚀 Starting Clean Sync...")
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(5)
 
-        # 1. Login
+        # Login
         driver.find_element(By.ID, "usernameField").send_keys(os.environ['NAUKRI_EMAIL'])
         driver.find_element(By.ID, "passwordField").send_keys(os.environ['NAUKRI_PASS'])
         driver.find_element(By.XPATH, "//button[text()='Login']").click()
         time.sleep(10)
 
-        # 2. Session Setup
+        # Session Setup
         session = requests.Session()
         for cookie in driver.get_cookies():
             session.cookies.set(cookie['name'], cookie['value'])
 
-        headers = {
-            "Clientid": "d36980564696075936856",
-            "Appid": "121",
-            "Systemid": "121",
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0",
-            "X-Requested-With": "XMLHttpRequest"
-        }
-
-        # 3. Privacy Headline Refresh (No VFX/Azure hardcoding)
-        h_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/profile-headline"
-        res = session.get(h_url, headers=headers)
-        if res.status_code == 200:
-            curr = res.json().get('resumeHeadline', 'Professional')
-            new_h = curr[:-1] if curr.endswith('.') else curr + "."
-            session.put(h_url, json={"resumeHeadline": new_h}, headers=headers)
-            print("✅ Profile Activity: Refreshed.")
-
-        # 4. Forced Resume Upload (API Sniper)
+        # API Sniper (Status 200 = Success)
         if os.path.exists(resume_path):
             with open(resume_path, 'rb') as f:
-                u_res = session.post(
-                    "https://www.naukri.com/mnjuser/profile/uploadResume", 
-                    files={'resume': ('Resume.pdf', f, 'application/pdf')}, 
-                    data={'isResumeUpload': '1'}, 
-                    headers={"User-Agent": "Mozilla/5.0", "X-Requested-With": "XMLHttpRequest"}
-                )
-                if u_res.status_code == 200:
+                res = session.post("https://www.naukri.com/mnjuser/profile/uploadResume", 
+                                    files={'resume': ('Resume.pdf', f, 'application/pdf')}, 
+                                    data={'isResumeUpload': '1'}, 
+                                    headers={"X-Requested-With": "XMLHttpRequest", "User-Agent": "Mozilla/5.0"})
+                
+                if res.status_code == 200:
                     print("🏁 FINAL STATUS: Resume pushed to server successfully.")
         
     except Exception as e:
@@ -71,4 +51,4 @@ def run_universal_clean_update():
         driver.quit()
 
 if __name__ == "__main__":
-    run_universal_clean_update()
+    run_clean_update()
