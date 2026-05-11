@@ -14,7 +14,7 @@ def run_clean_update():
 
     chrome_options = Options()
 
-    # STEALTH OPTIONS
+    # STEALTH SETTINGS
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
@@ -32,7 +32,7 @@ def run_clean_update():
         options=chrome_options
     )
 
-    # REMOVE SELENIUM DETECTION
+    # REMOVE WEBDRIVER FLAG
     driver.execute_script(
         "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
     )
@@ -84,25 +84,34 @@ def run_clean_update():
 
         time.sleep(15)
 
-        # PROFILE PAGE
+        # OPEN PROFILE PAGE
         driver.get("https://www.naukri.com/mnjuser/profile")
 
         print("📄 Opening profile")
 
         time.sleep(15)
 
-        # UPLOAD INPUT
+        # FIND FILE INPUT
         upload_input = wait.until(
             EC.presence_of_element_located(
-                (By.XPATH, "//input[@type='file']")
+                (By.CSS_SELECTOR, "input[type='file']")
             )
         )
 
+        # MAKE INPUT VISIBLE
+        driver.execute_script(
+            "arguments[0].style.display = 'block';",
+            upload_input
+        )
+
+        print("📎 Upload input found")
+
+        # UPLOAD FILE
         upload_input.send_keys(resume_path)
 
         print("📤 Resume uploading")
 
-        time.sleep(20)
+        time.sleep(25)
 
         print("✅ Resume uploaded successfully")
 
@@ -110,8 +119,10 @@ def run_clean_update():
 
         print(f"❌ ERROR: {str(e)}")
 
+        # SAVE SCREENSHOT
         driver.save_screenshot("error.png")
 
+        # SAVE PAGE SOURCE
         with open("page_source.html", "w", encoding="utf-8") as f:
             f.write(driver.page_source)
 
