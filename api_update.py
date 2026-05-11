@@ -1,23 +1,23 @@
 import os
 import time
-import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 
-def run_campus_fix():
+def run_forced_upload():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
     try:
-        print("Bhai, Naukri Campus specific update shuru...")
+        print("Bhai, Forced UI Upload shuru...")
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(5)
 
@@ -26,48 +26,46 @@ def run_campus_fix():
         driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
         driver.find_element(By.XPATH, "//button[text()='Login']").click()
         
-        print("✅ Login Success. Capturing Session...")
-        time.sleep(15)
+        print("✅ Login Success. Profile par ja raha hoon...")
+        time.sleep(15) 
+        driver.get("https://www.naukri.com/mnjuser/profile")
+        time.sleep(10)
 
-        session = requests.Session()
-        for cookie in driver.get_cookies():
-            session.cookies.set(cookie['name'], cookie['value'])
-
-        # 2. Campus Resume Upload API
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
-        if os.path.exists(resume_path):
-            print("🚀 Uploading to Campus Server...")
-            # Campus interface ke liye referer aur origin change karna zaroori hai
-            headers = {
-                "User-Agent": "Mozilla/5.0",
-                "X-Requested-With": "XMLHttpRequest",
-                "Referer": "https://www.naukri.com/mnjuser/profile",
-                "Origin": "https://www.naukri.com"
-            }
+        
+        # 2. Forced File Injection
+        # Campus UI mein 'input[type=file]' aksar hidden hota hai, hum use JS se dhund kar file bhejenge
+        print("📤 Injecting Resume into the UI...")
+        script = """
+        var input = document.querySelector('input[type="file"]');
+        if(!input) {
+            // Agar box dikh raha hai toh wahan ek input zarur hoga
+            let allInputs = document.querySelectorAll('input');
+            for(let i of allInputs) { if(i.type === 'file') input = i; }
+        }
+        if(input) {
+            input.style.display = 'block';
+            input.style.visibility = 'visible';
+            return "READY";
+        }
+        return "NOT_FOUND";
+        """
+        ready_status = driver.execute_script(script)
+        print(f"Input Status: {ready_status}")
+
+        if ready_status == "READY":
+            file_input = driver.find_element(By.CSS_SELECTOR, "input[type='file']")
+            file_input.send_keys(resume_path)
+            print("⏳ File sent. Waiting for upload animation...")
+            time.sleep(20) # Thoda zyada wait taaki UI refresh ho jaye
             
-            with open(resume_path, 'rb') as f:
-                files = {'resume': ('Resume.pdf', f, 'application/pdf')}
-                # Is endpoint se campus profiles refresh hoti hain
-                r = session.post("https://www.naukri.com/mnjuser/profile/uploadResume", 
-                                 files=files, data={'isResumeUpload': '1'}, headers=headers)
-            
-            if r.status_code == 200:
-                print("✅ API Upload successful.")
-            
-            # 3. FORCE REFRESH via UI (Sabse Important Step)
-            # Campus UI par bina click kiye update nahi dikhta
-            print("🔄 Triggering UI Save to clear the 'Upload Resume' box...")
-            driver.get("https://www.naukri.com/mnjuser/profile")
-            time.sleep(10)
-            
-            # Agar 'Upload' box abhi bhi dikh raha hai, toh use refresh marne ke liye page scroll karo
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2)
-            driver.execute_script("window.scrollTo(0, 0);")
-            
-            print("🏁 MISSION ACCOMPLISHED: Check karo, ab 'Success' toast aana chahiye.")
+            # 3. Final Check: Screenshot for you
+            driver.save_screenshot("upload_check.png")
+            print("🏁 MISSION ACCOMPLISHED: UI par file bhej di hai.")
         else:
-            print("❌ Resume.pdf missing!")
+            print("⚠️ UI Input nahi mila. Refreshing page as fallback.")
+            driver.refresh()
+            time.sleep(10)
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
@@ -75,4 +73,4 @@ def run_campus_fix():
         driver.quit()
 
 if __name__ == "__main__":
-    run_campus_fix()
+    run_forced_upload()
