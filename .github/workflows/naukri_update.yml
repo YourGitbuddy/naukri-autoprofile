@@ -2,7 +2,7 @@ name: Naukri Profile Refresh
 
 on:
   schedule:
-    - cron: '45 3 * * *' # Subah 9:15 AM IST approx
+    - cron: '45 3 * * *' 
   workflow_dispatch:
 
 jobs:
@@ -20,15 +20,8 @@ jobs:
       - name: Install Dependencies
         run: pip install selenium webdriver-manager
 
-      - name: Run Invisible Refresh
+      - name: Run Shortcut Ninja
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
         run: python api_update.py
-
-      - name: Upload Screenshot on Fail
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-screenshots
-          path: debug_error.png
