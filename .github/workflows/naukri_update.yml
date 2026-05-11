@@ -2,8 +2,8 @@ name: Naukri Profile Refresh
 
 on:
   schedule:
-    - cron: '45 3 * * *' # Roz subah refresh karega (approx 9:15 AM IST)
-  workflow_dispatch:      # Manual run karne ke liye option
+    - cron: '45 3 * * *' # Roz subah 9:15 AM IST par chalega
+  workflow_dispatch:      # Manual run karne ka button
 
 jobs:
   refresh:
@@ -12,23 +12,26 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # Python setup
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
+      # Saari required libraries ek saath
       - name: Install Dependencies
         run: |
-          pip install selenium webdriver-manager
-          # Chrome aur Driver setup runner par automatic ho jayega
+          pip install selenium webdriver-manager requests
 
-      - name: Run Blind Refresh Script
+      # Script execution
+      - name: Run Refresh Script
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
         run: python api_update.py
 
-      - name: Upload Debug Screenshot on Failure
+      # Agar fail hua toh screenshot save karega
+      - name: Upload Debug Screenshot
         if: failure()
         uses: actions/upload-artifact@v4
         with:
