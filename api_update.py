@@ -1,77 +1,101 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 import os
 import time
 
-EMAIL = os.getenv("NAUKRI_EMAIL")
-PASSWORD = os.getenv("NAUKRI_PASS")
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
-chrome_options = Options()
 
-# REQUIRED FOR GITHUB ACTIONS
-chrome_options.add_argument("--headless")
-chrome_options.add_argument("--no-sandbox")
-chrome_options.add_argument("--disable-dev-shm-usage")
-chrome_options.add_argument("--disable-gpu")
-chrome_options.add_argument("--window-size=1920,1080")
+def run_clean_update():
 
-# Anti detection
-chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options = Options()
 
-print("🚀 Starting Chrome")
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
 
-driver = webdriver.Chrome(options=chrome_options)
-
-wait = WebDriverWait(driver, 30)
-
-try:
-    print("🚀 Opening Naukri login")
-
-    driver.get("https://www.naukri.com/nlogin/login")
-
-    print("✅ Login page opened")
-
-    email_box = wait.until(
-        EC.presence_of_element_located((By.ID, "usernameField"))
+    driver = webdriver.Chrome(
+        service=Service(ChromeDriverManager().install()),
+        options=chrome_options
     )
 
-    password_box = wait.until(
-        EC.presence_of_element_located((By.ID, "passwordField"))
-    )
+    wait = WebDriverWait(driver, 30)
 
-    email_box.send_keys(EMAIL)
-    password_box.send_keys(PASSWORD)
+    resume_path = os.path.join(os.getcwd(), "Resume.pdf")
 
-    print("✅ Credentials entered")
+    try:
 
-    login_btn = wait.until(
-        EC.element_to_be_clickable(
-            (By.XPATH, "//button[text()='Login']")
+        print("🚀 Opening Naukri login")
+
+        driver.get("https://www.naukri.com/nlogin/login")
+
+        # EMAIL FIELD
+        email = wait.until(
+            EC.presence_of_element_located(
+                (By.XPATH, "//input[@type='text']")
+            )
         )
-    )
 
-    login_btn.click()
+        email.send_keys(os.environ["NAUKRI_EMAIL"])
 
-    print("⏳ Waiting after login")
-    time.sleep(10)
+        print("✅ Email entered")
 
-    print("✅ Login successful")
+        # PASSWORD FIELD
+        password = driver.find_element(
+            By.XPATH,
+            "//input[@type='password']"
+        )
 
-    driver.get("https://www.naukri.com/mnjuser/profile")
+        password.send_keys(os.environ["NAUKRI_PASS"])
 
-    time.sleep(5)
+        print("✅ Password entered")
 
-    print("✅ Profile page opened")
+        # LOGIN BUTTON
+        login_btn = driver.find_element(
+            By.XPATH,
+            "//button[@type='submit']"
+        )
 
-except Exception as e:
-    print(f"❌ ERROR: {str(e)}")
+        login_btn.click()
 
-    # Save screenshot for debugging
-    driver.save_screenshot("error.png")
-    print("📸 Screenshot saved")
+        print("🔐 Login clicked")
 
-finally:
-    driver.quit()
+        time.sleep(10)
+
+        # PROFILE PAGE
+        driver.get("https://www.naukri.com/mnjuser/profile")
+
+        print("📄 Opening profile")
+
+        time.sleep(10)
+
+        # FILE INPUT
+        upload_input = wait.until(
+            EC.presence_of_element_located(
+                (By.XPATH, "//input[@type='file']")
+            )
+        )
+
+        upload_input.send_keys(resume_path)
+
+        print("📤 Resume uploading...")
+
+        time.sleep(20)
+
+        print("✅ Resume uploaded successfully")
+
+    except Exception as e:
+
+        print(f"❌ ERROR: {e}")
+
+    finally:
+
+        driver.quit()
+
+
+if __name__ == "__main__":
+    run_clean_update()
