@@ -2,7 +2,7 @@ name: Naukri Profile Refresh
 
 on:
   schedule:
-    - cron: '45 3 * * *'
+    - cron: '45 3 * * *' # Subah 9:15 AM IST approx
   workflow_dispatch:
 
 jobs:
@@ -18,15 +18,15 @@ jobs:
           python-version: '3.10'
 
       - name: Install Dependencies
-        run: pip install selenium webdriver-manager requests
+        run: pip install selenium webdriver-manager
 
-      - name: Run Hybrid Refresh Script
+      - name: Run Invisible Refresh
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
         run: python api_update.py
 
-      - name: Upload Debug Screenshot
+      - name: Upload Screenshot on Fail
         if: failure()
         uses: actions/upload-artifact@v4
         with:
