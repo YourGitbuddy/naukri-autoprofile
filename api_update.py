@@ -17,6 +17,7 @@ def run_clean_update():
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
 
     driver = webdriver.Chrome(
         service=Service(ChromeDriverManager().install()),
@@ -29,11 +30,11 @@ def run_clean_update():
 
     try:
 
-        print("🚀 Opening Naukri login")
+        print("🚀 Opening Naukri Login")
 
         driver.get("https://www.naukri.com/nlogin/login")
 
-        # EMAIL FIELD
+        # EMAIL
         email = wait.until(
             EC.presence_of_element_located(
                 (By.XPATH, "//input[@type='text']")
@@ -44,7 +45,7 @@ def run_clean_update():
 
         print("✅ Email entered")
 
-        # PASSWORD FIELD
+        # PASSWORD
         password = driver.find_element(
             By.XPATH,
             "//input[@type='password']"
@@ -64,7 +65,7 @@ def run_clean_update():
 
         print("🔐 Login clicked")
 
-        time.sleep(10)
+        time.sleep(12)
 
         # PROFILE PAGE
         driver.get("https://www.naukri.com/mnjuser/profile")
@@ -91,6 +92,8 @@ def run_clean_update():
     except Exception as e:
 
         print(f"❌ ERROR: {e}")
+
+        driver.save_screenshot("error.png")
 
     finally:
 
