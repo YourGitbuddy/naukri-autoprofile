@@ -1,127 +1,95 @@
 import os
 import time
-import undetected_chromedriver as uc
-
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from playwright.sync_api import sync_playwright
 
 
-def run_clean_update():
-
-    options = uc.ChromeOptions()
-
-    options.add_argument("--headless=old")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-
-    options.add_argument("--disable-blink-features=AutomationControlled")
-
-    options.add_argument(
-        "user-agent=Mozilla/5.0 "
-        "(Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 "
-        "(KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    )
-
-    driver = uc.Chrome(
-        version_main=147,
-        options=options,
-        use_subprocess=False
-    )
-
-    wait = WebDriverWait(driver, 40)
+def run_bot():
 
     resume_path = os.path.join(os.getcwd(), "Resume.pdf")
 
-    try:
+    with sync_playwright() as p:
 
-        print("🚀 Opening Naukri")
-
-        driver.get("https://www.naukri.com/nlogin/login")
-
-        time.sleep(8)
-
-        print("🌐 Page Opened")
-
-        # EMAIL
-        email = wait.until(
-            EC.presence_of_element_located(
-                (By.XPATH, "//input[contains(@placeholder,'Email')]")
-            )
+        browser = p.chromium.launch(
+            headless=True
         )
 
-        email.send_keys(os.environ["NAUKRI_EMAIL"])
-
-        print("✅ Email Entered")
-
-        # PASSWORD
-        password = driver.find_element(
-            By.XPATH,
-            "//input[@type='password']"
-        )
-
-        password.send_keys(os.environ["NAUKRI_PASS"])
-
-        print("✅ Password Entered")
-
-        # LOGIN BUTTON
-        login_btn = driver.find_element(
-            By.XPATH,
-            "//button[@type='submit']"
-        )
-
-        login_btn.click()
-
-        print("🔐 Login Clicked")
-
-        time.sleep(15)
-
-        # PROFILE PAGE
-        driver.get("https://www.naukri.com/mnjuser/profile")
-
-        print("📄 Opening Profile")
-
-        time.sleep(15)
-
-        # FILE INPUT
-        upload_input = wait.until(
-            EC.presence_of_element_located(
-                (By.CSS_SELECTOR, "input[type='file']")
-            )
-        )
-
-        print("📎 Upload Input Found")
-
-        # UPLOAD
-        upload_input.send_keys(resume_path)
-
-        print("📤 Resume Uploading")
-
-        time.sleep(25)
-
-        print("✅ Resume Uploaded Successfully")
-
-    except Exception as e:
-
-        print(f"❌ ERROR: {str(e)}")
+        page = browser.new_page()
 
         try:
-            driver.save_screenshot("error.png")
+
+            print("🚀 Opening Naukri")
+
+            page.goto(
+                "https://www.naukri.com/nlogin/login",
+                timeout=60000
+            )
+
+            page.wait_for_timeout(5000)
+
+            print("🌐 Login Page Opened")
+
+            # EMAIL
+            page.locator(
+                "input[placeholder*='Email']"
+            ).fill(
+                os.environ["NAUKRI_EMAIL"]
+            )
+
+            print("✅ Email Entered")
+
+            # PASSWORD
+            page.locator(
+                "input[type='password']"
+            ).fill(
+                os.environ["NAUKRI_PASS"]
+            )
+
+            print("✅ Password Entered")
+
+            # LOGIN
+            page.locator(
+                "button[type='submit']"
+            ).click()
+
+            print("🔐 Login Clicked")
+
+            page.wait_for_timeout(15000)
+
+            # PROFILE PAGE
+            page.goto(
+                "https://www.naukri.com/mnjuser/profile",
+                timeout=60000
+            )
+
+            print("📄 Opening Profile")
+
+            page.wait_for_timeout(10000)
+
+            # UPLOAD RESUME
+            page.set_input_files(
+                "input[type='file']",
+                resume_path
+            )
+
+            print("📤 Resume Uploading")
+
+            page.wait_for_timeout(20000)
+
+            print("✅ Resume Uploaded Successfully")
+
+        except Exception as e:
+
+            print(f"❌ ERROR: {str(e)}")
+
+            page.screenshot(path="error.png")
 
             with open("page_source.html", "w", encoding="utf-8") as f:
-                f.write(driver.page_source)
+                f.write(page.content())
 
-        except:
-            pass
+        finally:
 
-    finally:
-
-        driver.quit()
+            browser.close()
 
 
 if __name__ == "__main__":
-    run_clean_update()
+    run_bot()
