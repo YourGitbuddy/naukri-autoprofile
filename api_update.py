@@ -1,10 +1,8 @@
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 import os
 import time
 
@@ -13,30 +11,28 @@ PASSWORD = os.getenv("NAUKRI_PASS")
 
 chrome_options = Options()
 
-# GitHub Actions Stable Options
-chrome_options.add_argument("--headless=new")
+# REQUIRED FOR GITHUB ACTIONS
+chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--window-size=1920,1080")
-chrome_options.add_argument("--remote-debugging-port=9222")
 
-# Optional anti-bot tweaks
+# Anti detection
 chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-chrome_options.add_experimental_option("useAutomationExtension", False)
 
-driver = webdriver.Chrome(
-    service=Service(ChromeDriverManager().install()),
-    options=chrome_options
-)
+print("🚀 Starting Chrome")
 
-wait = WebDriverWait(driver, 20)
+driver = webdriver.Chrome(options=chrome_options)
+
+wait = WebDriverWait(driver, 30)
 
 try:
     print("🚀 Opening Naukri login")
 
     driver.get("https://www.naukri.com/nlogin/login")
+
+    print("✅ Login page opened")
 
     email_box = wait.until(
         EC.presence_of_element_located((By.ID, "usernameField"))
@@ -46,11 +42,10 @@ try:
         EC.presence_of_element_located((By.ID, "passwordField"))
     )
 
-    email_box.clear()
     email_box.send_keys(EMAIL)
-
-    password_box.clear()
     password_box.send_keys(PASSWORD)
+
+    print("✅ Credentials entered")
 
     login_btn = wait.until(
         EC.element_to_be_clickable(
@@ -60,18 +55,23 @@ try:
 
     login_btn.click()
 
-    print("⏳ Waiting for login...")
-    time.sleep(8)
+    print("⏳ Waiting after login")
+    time.sleep(10)
 
-    # Open profile page
+    print("✅ Login successful")
+
     driver.get("https://www.naukri.com/mnjuser/profile")
 
     time.sleep(5)
 
-    print("✅ Profile opened successfully")
+    print("✅ Profile page opened")
 
 except Exception as e:
-    print(f"❌ ERROR: {e}")
+    print(f"❌ ERROR: {str(e)}")
+
+    # Save screenshot for debugging
+    driver.save_screenshot("error.png")
+    print("📸 Screenshot saved")
 
 finally:
     driver.quit()
