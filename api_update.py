@@ -1,61 +1,109 @@
-import os
+vimport os
 from playwright.sync_api import sync_playwright
-
-
-EMAIL = "YOUR_EMAIL"
-PASSWORD = "YOUR_PASSWORD"
-
-RESUME_PATH = "Resume.pdf"
 
 
 def run_bot():
 
+    resume_path = os.path.join(os.getcwd(), "Resume.pdf")
+
     with sync_playwright() as p:
 
         browser = p.chromium.launch(
-            headless=False
+            headless=True
         )
 
-        page = browser.new_page()
-
-        print("🚀 Opening Naukri")
-
-        page.goto("https://www.naukri.com/nlogin/login")
-
-        page.wait_for_timeout(5000)
-
-        page.fill(
-            "input[placeholder*='Email']",
-            EMAIL
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1920, "height": 1080}
         )
 
-        page.fill(
-            "input[type='password']",
-            PASSWORD
-        )
+        page = context.new_page()
 
-        print("🔐 Logging in")
+        try:
 
-        page.click("button[type='submit']")
+            print("🚀 Opening Naukri")
 
-        page.wait_for_timeout(15000)
+            page.goto(
+                "https://www.naukri.com/nlogin/login",
+                wait_until="networkidle",
+                timeout=60000
+            )
 
-        print("📄 Opening Profile")
+            page.wait_for_timeout(10000)
 
-        page.goto("https://www.naukri.com/mnjuser/profile")
+            print("🌐 Login Page Opened")
 
-        page.wait_for_timeout(10000)
+            # DEBUG
+            page.screenshot(path="before_login.png")
 
-        page.set_input_files(
-            "input[type='file']",
-            RESUME_PATH
-        )
+            # EMAIL
+            page.locator(
+                "input[type='text']"
+            ).first.fill(
+                os.environ["NAUKRI_EMAIL"]
+            )
 
-        print("✅ Resume Uploaded")
+            print("✅ Email Entered")
 
-        page.wait_for_timeout(10000)
+            # PASSWORD
+            page.locator(
+                "input[type='password']"
+            ).fill(
+                os.environ["NAUKRI_PASS"]
+            )
 
-        browser.close()
+            print("✅ Password Entered")
+
+            # LOGIN
+            page.locator(
+                "button[type='submit']"
+            ).click()
+
+            print("🔐 Login Clicked")
+
+            page.wait_for_timeout(15000)
+
+            # PROFILE
+            page.goto(
+                "https://www.naukri.com/mnjuser/profile",
+                wait_until="networkidle",
+                timeout=60000
+            )
+
+            print("📄 Profile Opened")
+
+            page.wait_for_timeout(10000)
+
+            page.screenshot(path="profile.png")
+
+            # UPLOAD
+            page.set_input_files(
+                "input[type='file']",
+                resume_path
+            )
+
+            print("📤 Resume Uploading")
+
+            page.wait_for_timeout(20000)
+
+            print("✅ Resume Uploaded")
+
+        except Exception as e:
+
+            print(f"❌ ERROR: {str(e)}")
+
+            page.screenshot(path="error.png")
+
+            with open("page_source.html", "w", encoding="utf-8") as f:
+                f.write(page.content())
+
+        finally:
+
+            browser.close()
 
 
 if __name__ == "__main__":
