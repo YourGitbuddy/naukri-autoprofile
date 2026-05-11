@@ -1,64 +1,69 @@
 import os
-import cloudscraper
-import json
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
 
-def run_invisible_refresh():
-    # Chrome Desktop mimic kar rahe hain
-    scraper = cloudscraper.create_scraper(
-        browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
+def run_clean_update():
+
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("user-agent=Mozilla/5.0")
+
+    driver = webdriver.Chrome(
+        service=Service(ChromeDriverManager().install()),
+        options=chrome_options
     )
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Appid": "109",
-        "Systemid": "109",
-        "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest",
-        "Origin": "https://www.naukri.com"
-    }
-    
-    try:
-        # Step 1: Login
-        print("Logging in...")
-        auth_url = "https://www.naukri.com/nlogin/login"
-        login_payload = {"username": os.environ['NAUKRI_EMAIL'], "password": os.environ['NAUKRI_PASS']}
-        res = scraper.post(auth_url, json=login_payload, headers=headers)
-        
-        if res.status_code != 200:
-            print(f"Login Failed: {res.status_code}")
-            return
-        
-        print("Login Success! Toggling Invisible Space...")
 
-        # Step 2: Get current Profile Summary
-        # Note: Ye endpoint humesha stable rehta hai
-        summary_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/users/self/profile-summary"
-        get_res = scraper.get(summary_url, headers=headers)
-        
-        if get_res.status_code == 200:
-            current_data = get_res.json()
-            summary_text = current_data.get('summary', 'Azure Infrastructure and Data Engineer')
-            
-            # Invisible Logic: Agar last mein space hai to hata do, nahi hai to ek space add kar do.
-            # Ye space UI par kisi ko nahi dikhega.
-            if summary_text.endswith(' '):
-                new_summary = summary_text.rstrip()
-            else:
-                new_summary = summary_text + ' '
-            
-            # Step 3: PUT request to save the change
-            update_payload = {"summary": new_summary}
-            update_res = scraper.put(summary_url, json=update_payload, headers=headers)
-            
-            if update_res.status_code in [200, 204]:
-                print("🏁 SUCCESS: Invisible update complete! Profile updated status refreshed.")
-            else:
-                print(f"Update failed with status: {update_res.status_code}")
-        else:
-            print(f"Could not fetch summary: {get_res.status_code}")
+    resume_path = os.path.join(os.getcwd(), "Resume.pdf")
+
+    try:
+        print("🚀 Starting Naukri Refresh")
+
+        driver.get("https://www.naukri.com/nlogin/login")
+
+        time.sleep(5)
+
+        # LOGIN
+        driver.find_element(By.ID, "usernameField").send_keys(
+            os.environ['NAUKRI_EMAIL']
+        )
+
+        driver.find_element(By.ID, "passwordField").send_keys(
+            os.environ['NAUKRI_PASS']
+        )
+
+        driver.find_element(By.XPATH, "//button[text()='Login']").click()
+
+        print("🔐 Login success")
+
+        time.sleep(10)
+
+        # PROFILE PAGE
+        driver.get("https://www.naukri.com/mnjuser/profile")
+
+        time.sleep(10)
+
+        # UPLOAD
+        upload_input = driver.find_element(By.XPATH, "//input[@type='file']")
+
+        upload_input.send_keys(resume_path)
+
+        print("📤 Resume uploading...")
+
+        time.sleep(15)
+
+        print("✅ Resume uploaded successfully")
 
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"❌ Error: {e}")
+
+    finally:
+        driver.quit()
 
 if __name__ == "__main__":
-    run_invisible_refresh()
+    run_clean_update()
