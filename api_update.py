@@ -2,92 +2,60 @@ import os
 from playwright.sync_api import sync_playwright
 
 
-def run_bot():
+EMAIL = "YOUR_EMAIL"
+PASSWORD = "YOUR_PASSWORD"
 
-    resume_path = os.path.join(os.getcwd(), "Resume.pdf")
+RESUME_PATH = "Resume.pdf"
+
+
+def run_bot():
 
     with sync_playwright() as p:
 
         browser = p.chromium.launch(
-            headless=True
+            headless=False
         )
 
         page = browser.new_page()
 
-        try:
+        print("🚀 Opening Naukri")
 
-            print("🚀 Opening Naukri")
+        page.goto("https://www.naukri.com/nlogin/login")
 
-            page.goto(
-                "https://www.naukri.com/nlogin/login",
-                timeout=60000
-            )
+        page.wait_for_timeout(5000)
 
-            page.wait_for_timeout(5000)
+        page.fill(
+            "input[placeholder*='Email']",
+            EMAIL
+        )
 
-            print("🌐 Login Page Opened")
+        page.fill(
+            "input[type='password']",
+            PASSWORD
+        )
 
-            # EMAIL
-            page.locator(
-                "input[placeholder*='Email']"
-            ).fill(
-                os.environ["NAUKRI_EMAIL"]
-            )
+        print("🔐 Logging in")
 
-            print("✅ Email Entered")
+        page.click("button[type='submit']")
 
-            # PASSWORD
-            page.locator(
-                "input[type='password']"
-            ).fill(
-                os.environ["NAUKRI_PASS"]
-            )
+        page.wait_for_timeout(15000)
 
-            print("✅ Password Entered")
+        print("📄 Opening Profile")
 
-            # LOGIN
-            page.locator(
-                "button[type='submit']"
-            ).click()
+        page.goto("https://www.naukri.com/mnjuser/profile")
 
-            print("🔐 Login Clicked")
+        page.wait_for_timeout(10000)
 
-            page.wait_for_timeout(15000)
+        page.set_input_files(
+            "input[type='file']",
+            RESUME_PATH
+        )
 
-            # PROFILE PAGE
-            page.goto(
-                "https://www.naukri.com/mnjuser/profile",
-                timeout=60000
-            )
+        print("✅ Resume Uploaded")
 
-            print("📄 Opening Profile")
+        page.wait_for_timeout(10000)
 
-            page.wait_for_timeout(10000)
-
-            # UPLOAD RESUME
-            page.set_input_files(
-                "input[type='file']",
-                resume_path
-            )
-
-            print("📤 Resume Uploading")
-
-            page.wait_for_timeout(20000)
-
-            print("✅ Resume Uploaded Successfully")
-
-        except Exception as e:
-
-            print(f"❌ ERROR: {str(e)}")
-
-            page.screenshot(path="error.png")
-
-            with open("page_source.html", "w", encoding="utf-8") as f:
-                f.write(page.content())
-
-        finally:
-
-            browser.close()
+        browser.close()
 
 
 if __name__ == "__main__":
