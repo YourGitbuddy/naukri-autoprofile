@@ -1,3 +1,4 @@
+
 import os
 import time
 import requests
@@ -6,7 +7,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
-def run_nuke_update():
+def run_stable_update():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -16,7 +17,7 @@ def run_nuke_update():
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
     try:
-        print("Bhai, Final Nuke Mission shuru...")
+        print("Bhai, Stable Automation shuru...")
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(5)
 
@@ -34,39 +35,23 @@ def run_nuke_update():
 
         resume_path = os.path.join(os.getcwd(), "Resume.pdf")
         if os.path.exists(resume_path):
-            print("🚀 Uploading + Syncing Resume...")
-            
-            # Ye headers Campus/Professional dono ke liye 'Real' lagte hain
+            print("🚀 API Sync shuru...")
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
                 "X-Requested-With": "XMLHttpRequest",
-                "Referer": "https://www.naukri.com/mnjuser/profile",
-                "Origin": "https://www.naukri.com",
-                "Accept": "application/json, text/javascript, */*; q=0.01"
+                "Referer": "https://www.naukri.com/mnjuser/profile"
             }
-
             with open(resume_path, 'rb') as f:
-                # 1. First Hit: The Upload
-                files = {'resume': ('Resume.pdf', f, 'application/pdf')}
-                data = {
-                    'isResumeUpload': '1',
-                    'm_id': '', # Campus profiles often need this empty or dynamic
-                    'appId': '121'
-                }
                 res = session.post("https://www.naukri.com/mnjuser/profile/uploadResume", 
-                                   files=files, data=data, headers=headers)
-                
+                                   files={'resume': ('Resume.pdf', f, 'application/pdf')}, 
+                                   data={'isResumeUpload': '1'}, headers=headers)
+            
             if res.status_code == 200:
-                print("✅ Server accepted file. Now triggering Profile Sync...")
-                
-                # 2. Second Hit: Profile Save Trigger (The missing piece)
-                # Ye Naukri ko bolta hai ki "Changes save karo"
-                sync_url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/profile/refresh"
-                sync_res = session.post(sync_url, headers={"Clientid": "d36980564696075936856", "Appid": "121", "Systemid": "121"})
-                
-                print(f"🏁 Sync Status: {sync_res.status_code}. Mission Finished!")
+                print("🏁 MISSION ACCOMPLISHED: Resume updated in Naukri database!")
             else:
-                print(f"❌ Upload Fail: {res.status_code}")
+                print(f"⚠️ Server Response: {res.status_code}")
+        else:
+            print("❌ Resume.pdf not found in repo.")
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
@@ -74,4 +59,4 @@ def run_nuke_update():
         driver.quit()
 
 if __name__ == "__main__":
-    run_nuke_update()
+    run_stable_update()
