@@ -1,4 +1,4 @@
-vimport os
+import os
 from playwright.sync_api import sync_playwright
 
 
@@ -37,7 +37,7 @@ def run_bot():
 
             print("🌐 Login Page Opened")
 
-            # DEBUG
+            # DEBUG SCREENSHOT
             page.screenshot(path="before_login.png")
 
             # EMAIL
@@ -67,7 +67,7 @@ def run_bot():
 
             page.wait_for_timeout(15000)
 
-            # PROFILE
+            # PROFILE PAGE
             page.goto(
                 "https://www.naukri.com/mnjuser/profile",
                 wait_until="networkidle",
@@ -78,9 +78,10 @@ def run_bot():
 
             page.wait_for_timeout(10000)
 
+            # PROFILE SCREENSHOT
             page.screenshot(path="profile.png")
 
-            # UPLOAD
+            # UPLOAD RESUME
             page.set_input_files(
                 "input[type='file']",
                 resume_path
@@ -90,7 +91,7 @@ def run_bot():
 
             page.wait_for_timeout(20000)
 
-            print("✅ Resume Uploaded")
+            print("✅ Resume Uploaded Successfully")
 
         except Exception as e:
 
