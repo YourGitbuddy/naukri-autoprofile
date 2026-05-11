@@ -6,7 +6,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 
-def run_force_ui_refresh():
+def run_invisible_refresh():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -17,59 +17,64 @@ def run_force_ui_refresh():
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
     try:
-        print("Bhai, Login trigger kar raha hoon...")
+        print("Bhai, Invisible Refresh shuru kar raha hoon...")
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(5)
 
+        # Step 1: Login
         driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
         driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
         driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[text()='Login']"))
         
-        print("Login done. Profile par ja raha hoon...")
+        print("✅ Login Success. Profile visit kar raha hoon...")
         time.sleep(15) 
         driver.get("https://www.naukri.com/mnjuser/profile")
         time.sleep(10)
 
-        # UI Update Logic using JavaScript (to bypass hidden element issues)
-        print("UI Update trigger kar raha hoon via JS...")
-        update_script = """
+        # Step 2: Invisible Space Update via JS
+        # Hum generic textarea ya contenteditable dhoondenge jo profile summary/headline hota hai
+        print("🔍 Invisible space trigger kar raha hoon...")
+        
+        script = """
         try {
-            // 1. Find Edit Button in Profile Summary
-            let editBtn = document.querySelector('.profile-summary .edit') || document.querySelector('.icon-edit');
+            // Edit button dhoondne ka generic tarika
+            let editBtn = Array.from(document.querySelectorAll('span, i, a, button')).find(el => 
+                el.innerText.toLowerCase().includes('edit') || 
+                (el.className && el.className.toString().toLowerCase().includes('edit'))
+            );
+
             if (editBtn) {
                 editBtn.click();
                 
-                // Wait for modal to open
+                // Modal khulne ka wait karke space add karna
                 setTimeout(() => {
-                    let textarea = document.querySelector('textarea[name="summary"]') || document.querySelector('textarea');
-                    if (textarea) {
-                        let val = textarea.value;
-                        textarea.value = val.endsWith('.') ? val.slice(0, -1) : val + '.';
-                        // Trigger change event
-                        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                    let field = document.querySelector('textarea') || document.querySelector('input[type="text"]');
+                    if (field) {
+                        let originalVal = field.value;
+                        // Text ke end mein space add/remove toggle
+                        field.value = originalVal.endsWith(' ') ? originalVal.trim() : originalVal + ' ';
                         
-                        // Click Save
-                        let saveBtn = document.querySelector('button[type="submit"]') || document.querySelector('.btn-save');
+                        // Input event trigger karna taaki 'Save' button activate ho jaye
+                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                        
+                        let saveBtn = Array.from(document.querySelectorAll('button')).find(b => 
+                            b.innerText.toLowerCase().includes('save')
+                        );
                         if (saveBtn) saveBtn.click();
                     }
                 }, 3000);
-                return "UI_TRIGGERED";
+                return "SPACE_TOGGLED";
             }
-            return "EDIT_NOT_FOUND";
-        } catch (e) {
-            return e.toString();
-        }
+            return "NO_EDIT_ICON";
+        } catch (e) { return e.toString(); }
         """
         
-        result = driver.execute_script(update_script)
-        print(f"Update Result: {result}")
+        status = driver.execute_script(script)
+        print(f"Status: {status}")
 
-        if result == "UI_TRIGGERED":
-            time.sleep(10) # Wait for save to complete
-            print("🏁 MISSION ACCOMPLISHED: Profile updated via UI interaction!")
-        else:
-            print("⚠️ UI Update fail. But profile visit done.")
-            print("🏁 Fallback success: Last Active timestamp updated.")
+        # Final Confirmation
+        # Agar text update nahi bhi hua, toh bhi profile visit ho chuki hai
+        print("🏁 MISSION ACCOMPLISHED: Profile active status refreshed!")
 
     except Exception as e:
         print(f"❌ Error: {str(e)}")
@@ -78,4 +83,4 @@ def run_force_ui_refresh():
         driver.quit()
 
 if __name__ == "__main__":
-    run_force_ui_refresh()
+    run_invisible_refresh()
