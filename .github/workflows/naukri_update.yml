@@ -8,6 +8,7 @@ on:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -20,8 +21,15 @@ jobs:
       - name: Install Dependencies
         run: pip install selenium webdriver-manager
 
-      - name: Run Shortcut Ninja
+      - name: Run Force Resume Uploader
         env:
           NAUKRI_EMAIL: ${{ secrets.NAUKRI_EMAIL }}
           NAUKRI_PASS: ${{ secrets.NAUKRI_PASS }}
         run: python api_update.py
+
+      - name: Upload Debug Screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: debug_error.png
