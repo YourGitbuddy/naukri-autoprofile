@@ -39,5 +39,5 @@ jobs:
         with:
           name: debug-files
           path: |
-            error.png
+            *.png
             page_source.html
