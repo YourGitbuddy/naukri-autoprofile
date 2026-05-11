@@ -7,7 +7,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 
-def run_nuclear_refresh():
+def run_summary_sniper():
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -21,23 +21,21 @@ def run_nuclear_refresh():
         driver.get("https://www.naukri.com/nlogin/login")
         time.sleep(5)
 
-        # Login process
         driver.execute_script(f"document.getElementById('usernameField').value='{os.environ['NAUKRI_EMAIL']}';")
         driver.execute_script(f"document.getElementById('passwordField').value='{os.environ['NAUKRI_PASS']}';")
         driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[text()='Login']"))
         
-        print("Login done. Cookies extract kar raha hoon...")
-        time.sleep(15) # Wait for session to establish
+        print("Login done. Session capture kar raha hoon...")
+        time.sleep(15) 
 
-        # Step 1: Extract Cookies from Selenium to use in Requests
         cookies = driver.get_cookies()
         session = requests.Session()
         for cookie in cookies:
             session.cookies.set(cookie['name'], cookie['value'])
 
-        # Step 2: Push Direct Profile Update via Cloudgateway API
-        # Yeh wahi API hai jo Naukri ka 'Save' button dabane par chalti hai
-        url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/profile-headline"
+        # --- NAYA ENDPOINT: Profile Summary Update ---
+        # Ye endpoint usually 501 nahi deta
+        url = "https://www.naukri.com/cloudgateway-jsw/jobseeker-profile-services/v0/profile-summary"
         
         headers = {
             "Content-Type": "application/json",
@@ -47,24 +45,23 @@ def run_nuclear_refresh():
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
 
-        # Azure Infrastructure Engineer headline refresh logic
-        headline = "Azure Infrastructure and Data Engineer | Azure Synapse | Bicep | Kubernetes (AKS)"
-        if int(time.time()) % 2 == 0:
-            headline += "."
-
-        payload = {"resumeHeadline": headline}
+        # Azure Infrastructure Engineer Summary
+        summary_base = "Azure Infrastructure and Data Engineer with expertise in Synapse, Bicep, and Kubernetes (AKS). Working on FinCrime AI platforms."
         
-        print("API Sniper firing...")
+        # Har update ko unique banane ke liye toggle
+        dot = "." if int(time.time()) % 2 == 0 else ""
+        payload = {"profileSummary": f"{summary_base}{dot}"}
+        
+        print(f"Summary Sniper firing... (Dot status: {'On' if dot else 'Off'})")
         response = session.put(url, json=payload, headers=headers)
 
         if response.status_code in [200, 201, 204]:
-            print(f"🏁 MISSION ACCOMPLISHED: Profile updated via API Tunneling! Status: {response.status_code}")
+            print(f"🏁 MISSION ACCOMPLISHED: Profile Summary updated successfully!")
         else:
-            print(f"⚠️ API Tunneling failed (Status: {response.status_code}). Trying Fallback...")
-            # Fallback: Just hit the profile URL to update 'Last Active'
+            print(f"⚠️ Summary API failed (Status: {response.status_code}). Triggering Profile Visit...")
             driver.get("https://www.naukri.com/mnjuser/profile")
             time.sleep(5)
-            print("🏁 Fallback success: Profile visited.")
+            print("🏁 Fallback success: Last Active timestamp updated.")
 
     except Exception as e:
         print(f"❌ Critical Error: {str(e)}")
@@ -73,4 +70,4 @@ def run_nuclear_refresh():
         driver.quit()
 
 if __name__ == "__main__":
-    run_nuclear_refresh()
+    run_summary_sniper()
