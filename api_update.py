@@ -5,52 +5,61 @@ import time
 EMAIL = os.getenv("NAUKRI_EMAIL")
 PASSWORD = os.getenv("NAUKRI_PASS")
 
-with sync_playwright() as p:
-    browser = p.chromium.launch(
-        headless=True,
-        args=[
-            "--no-sandbox",
-            "--disable-dev-shm-usage"
-        ]
-    )
+def run_bot():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled"
+            ]
+        )
 
-    page = browser.new_page()
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        )
 
-    try:
-        print("🚀 Opening Naukri")
+        page = context.new_page()
 
-        page.goto("https://www.naukri.com/nlogin/login", wait_until="networkidle")
+        try:
+            print("🚀 Opening Naukri")
 
-        print("🌐 Login Page Opened")
+            page.goto("https://www.naukri.com/nlogin/login", timeout=60000)
 
-        # exact selectors
-        page.locator("#usernameField").fill(EMAIL)
-        page.locator("#passwordField").fill(PASSWORD)
+            print("🌐 Login Page Opened")
 
-        print("✅ Credentials entered")
+            time.sleep(5)
 
-        page.locator("button[type='submit']").click()
+            # fallback selectors
+            email = page.locator("input[placeholder*='Email']").first
+            password = page.locator("input[type='password']").first
 
-        time.sleep(8)
+            email.fill(EMAIL)
+            password.fill(PASSWORD)
 
-        print("✅ Login successful")
+            print("✅ Credentials entered")
 
-        page.goto("https://www.naukri.com/mnjuser/profile", wait_until="networkidle")
+            page.locator("button:has-text('Login')").click()
 
-        print("✅ Profile opened")
+            time.sleep(10)
 
-        # update profile timestamp trick
-        page.reload()
+            print("✅ Login successful")
 
-        print("✅ Profile refreshed")
+            page.goto("https://www.naukri.com/mnjuser/profile")
 
-    except Exception as e:
-        print(f"❌ ERROR: {e}")
-        page.screenshot(path="error.png")
+            time.sleep(8)
 
-    finally:
-        browser.close()
+            page.reload()
+
+            print("✅ Profile refreshed")
+
+        except Exception as e:
+            print(f"❌ ERROR: {e}")
+            page.screenshot(path="error.png")
+
+        finally:
+            browser.close()
 
 
-if __name__ == "__main__":
-    run_bot()
+run_bot()
