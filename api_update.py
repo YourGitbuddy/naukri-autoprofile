@@ -5,14 +5,22 @@ import time
 EMAIL = os.getenv("NAUKRI_EMAIL")
 PASSWORD = os.getenv("NAUKRI_PASS")
 
+PROXY_SERVER = os.getenv("PROXY_SERVER")   # http://host:port
+PROXY_USER = os.getenv("PROXY_USER")
+PROXY_PASS = os.getenv("PROXY_PASS")
+
 def run_bot():
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
+            proxy={
+                "server": PROXY_SERVER,
+                "username": PROXY_USER,
+                "password": PROXY_PASS
+            },
             args=[
                 "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled"
+                "--disable-dev-shm-usage"
             ]
         )
 
@@ -24,32 +32,20 @@ def run_bot():
 
         try:
             print("🚀 Opening Naukri")
-
             page.goto("https://www.naukri.com/nlogin/login", timeout=60000)
 
-            print("🌐 Login Page Opened")
+            page.wait_for_selector("#usernameField", timeout=30000)
 
-            time.sleep(5)
-
-            # fallback selectors
-            email = page.locator("input[placeholder*='Email']").first
-            password = page.locator("input[type='password']").first
-
-            email.fill(EMAIL)
-            password.fill(PASSWORD)
+            page.fill("#usernameField", EMAIL)
+            page.fill("#passwordField", PASSWORD)
 
             print("✅ Credentials entered")
 
-            page.locator("button:has-text('Login')").click()
-
+            page.click("button[type='submit']")
             time.sleep(10)
 
-            print("✅ Login successful")
-
             page.goto("https://www.naukri.com/mnjuser/profile")
-
-            time.sleep(8)
-
+            time.sleep(5)
             page.reload()
 
             print("✅ Profile refreshed")
@@ -60,6 +56,5 @@ def run_bot():
 
         finally:
             browser.close()
-
 
 run_bot()
